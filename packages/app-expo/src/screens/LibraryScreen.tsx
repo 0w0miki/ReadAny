@@ -1,7 +1,7 @@
 import { BookCard } from "@/components/library/BookCard";
 import {
-  BOOK_CARD_INFO_HEIGHT,
   getBookCardMetrics,
+  getShelfInfoHeight,
 } from "@/components/library/book-card-styles";
 import { GroupCard } from "@/components/library/GroupCard";
 import { GroupPickerSheet } from "@/components/library/GroupPickerSheet";
@@ -188,7 +188,7 @@ export function LibraryScreen() {
     let bestScore = Number.NEGATIVE_INFINITY;
     for (const count of candidates) {
       const width = Math.floor((contentWidth - gridGap * (count - 1)) / count);
-      const rowHeight = width * (41 / 28) + BOOK_CARD_INFO_HEIGHT;
+      const rowHeight = width * (41 / 28) + getShelfInfoHeight(width);
       const rowPitch = rowHeight + gridGap;
       const rowsPerPage = Math.max(1, Math.floor(available / rowPitch));
       // 0..1: how much of the page height is filled by whole rows.
@@ -474,7 +474,7 @@ export function LibraryScreen() {
   // multiples and no page can reveal a sliver of the next row.
   const gridRowCount = Math.ceil(gridItems.length / Math.max(1, columnCount));
   const { coverHeight } = getBookCardMetrics(gridItemWidth);
-  const gridRowHeight = coverHeight + BOOK_CARD_INFO_HEIGHT;
+  const gridRowHeight = coverHeight + getShelfInfoHeight(gridItemWidth);
   // Reserve room for the page nav bar below the list.
   const pageNavReserve = einkMode ? PAGE_NAV_RESERVE : 0;
   const shelfAvailable = Math.max(gridRowHeight, shelfAreaHeight - pageNavReserve - 8);
