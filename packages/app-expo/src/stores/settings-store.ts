@@ -12,6 +12,8 @@ import {
 import { create } from "zustand";
 import { deleteSecure, loadSecure, saveSecure, withPersist } from "./persist";
 
+export type ShelfColumnsPreference = "auto" | 3 | 4 | 5;
+
 export interface SettingsState {
   readSettings: ReadSettings;
   translationConfig: TranslationConfig;
@@ -26,12 +28,15 @@ export interface SettingsState {
    * targets e-ink devices first.
    */
   einkMode: boolean;
+  /** Bookshelf grid columns: auto picks the best fit on e-ink; 3/4/5 pin it. */
+  shelfColumns: ShelfColumnsPreference;
   _hasHydrated: boolean;
   _apiKeysLoaded: boolean;
 
   completeOnboarding: () => void;
   setShowOnboardingGuide: (show: boolean) => void;
   setEinkMode: (enabled: boolean) => void;
+  setShelfColumns: (value: ShelfColumnsPreference) => void;
   updateReadSettings: (updates: Partial<ReadSettings>) => void;
   updateTranslationConfig: (updates: Partial<TranslationConfig>) => void;
   updateAIConfig: (
@@ -456,6 +461,7 @@ export const useSettingsStore = create<SettingsState>()(
       hasCompletedOnboarding: false,
       showOnboardingGuide: true,
       einkMode: true,
+      shelfColumns: "auto",
       _hasHydrated: false,
       _apiKeysLoaded: false,
 
@@ -464,6 +470,7 @@ export const useSettingsStore = create<SettingsState>()(
       completeOnboarding: () => set({ hasCompletedOnboarding: true }),
       setShowOnboardingGuide: (show: boolean) => set({ showOnboardingGuide: show }),
       setEinkMode: (enabled) => set({ einkMode: enabled, settingsUpdatedAt: Date.now() }),
+      setShelfColumns: (value) => set({ shelfColumns: value, settingsUpdatedAt: Date.now() }),
 
       updateReadSettings: (updates) =>
         set((state) => ({
@@ -650,6 +657,7 @@ export const useSettingsStore = create<SettingsState>()(
           translationConfig: defaultTranslationConfig,
           aiConfig: defaultAIConfig,
           einkMode: true,
+          shelfColumns: "auto",
           _apiKeysLoaded: false,
         });
       },

@@ -618,6 +618,9 @@
     "vectorHint": "本地索引与嵌入模型",
     "skillsHint": "内置与自定义 AI 技能",
     "hubHint": "设置按类别分页，减少电纸书上的滚动。",
-    "allSettings": "全部设置"
+    "allSettings": "全部设置",
+    "shelfColumns": "书架列数",
+    "shelfColumnsHint": "自动会按屏幕高度选择填充最好的列数；也可以手动固定",
+    "shelfColumnsAuto": "自动"
   }
 }

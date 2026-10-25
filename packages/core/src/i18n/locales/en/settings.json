@@ -618,6 +618,9 @@
     "vectorHint": "Local index and embedding model",
     "skillsHint": "Built-in and custom AI skills",
     "hubHint": "Settings are grouped by tab to keep scrolling short on e-ink.",
-    "allSettings": "All settings"
+    "allSettings": "All settings",
+    "shelfColumns": "Shelf Columns",
+    "shelfColumnsHint": "Auto picks the column count that fills the screen best; you can also pin it",
+    "shelfColumnsAuto": "Auto"
   }
 }

@@ -34,6 +34,7 @@ import type { RootStackParamList } from "@/navigation/RootNavigator";
 import { WebDavConnectSheet } from "@/screens/library/WebDavConnectSheet";
 import { WebDavImportSourceSheet } from "@/screens/library/WebDavImportSourceSheet";
 import { useLibraryStore } from "@/stores/library-store";
+import { useSettingsStore } from "@/stores/settings-store";
 import {
   type ThemeColors,
   fontSize,
@@ -158,6 +159,7 @@ export function LibraryScreen() {
   const nav = useNavigation<Nav>();
   const layout = useResponsiveLayout();
   const einkMode = useEinkMode();
+  const shelfColumns = useSettingsStore((s) => s.shelfColumns);
   // Available height of the shelf area (grid + page bar); measured below.
   const [shelfAreaHeight, setShelfAreaHeight] = useState(0);
   const gridGap = layout.isTablet ? 16 : GRID_GAP;
@@ -169,6 +171,7 @@ export function LibraryScreen() {
    * readable.
    */
   const columnCount = useMemo(() => {
+    if (shelfColumns !== "auto") return shelfColumns;
     if (!einkMode) return baseColumnCount;
     const minCardWidth = layout.isTablet ? 96 : 72;
     const candidates = [baseColumnCount, baseColumnCount + 1, baseColumnCount + 2].filter(
@@ -204,6 +207,7 @@ export function LibraryScreen() {
     gridGap,
     layout.isTablet,
     shelfAreaHeight,
+    shelfColumns,
   ]);
   const gridItemWidth = Math.floor((contentWidth - gridGap * (columnCount - 1)) / columnCount);
   const s = useMemo(

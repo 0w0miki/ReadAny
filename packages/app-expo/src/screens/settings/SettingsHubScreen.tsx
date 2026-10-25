@@ -19,6 +19,7 @@ import { clearMobileRuntimeCache, formatCacheSize } from "@/lib/platform/mobile-
 import { stopTTSPreview } from "@/lib/platform/tts-preview";
 import type { RootStackParamList } from "@/navigation/RootNavigator";
 import { useSettingsStore, useTTSStore } from "@/stores";
+import type { ShelfColumnsPreference } from "@/stores/settings-store";
 import { fontSize, fontWeight, radius, spacing, useColors } from "@/styles/theme";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
@@ -102,6 +103,8 @@ export function SettingsHubScreen({ embedded = false }: { embedded?: boolean } =
   const nav = useNavigation<Nav>();
   const einkMode = useEinkMode();
   const setEinkMode = useSettingsStore((s) => s.setEinkMode);
+  const shelfColumns = useSettingsStore((s) => s.shelfColumns);
+  const setShelfColumns = useSettingsStore((s) => s.setShelfColumns);
   const [activeTab, setActiveTab] = useState<TabKey>("general");
   const [clearingCache, setClearingCache] = useState(false);
   const stopTTS = useTTSStore((s) => s.stop);
@@ -294,24 +297,74 @@ export function SettingsHubScreen({ embedded = false }: { embedded?: boolean } =
         showsVerticalScrollIndicator={false}
       >
         {activeTab === "general" ? (
-          <View style={[s.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
-            <View style={s.switchRow}>
-              <View style={s.rowTextWrap}>
+          <>
+            <View style={[s.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+              <View style={s.switchRow}>
+                <View style={s.rowTextWrap}>
+                  <Text style={[s.rowLabel, { color: colors.foreground }]}>
+                    {t("settings.einkMode", "电子墨水屏模式")}
+                  </Text>
+                  <Text style={[s.rowHint, { color: colors.mutedForeground }]}>
+                    {t("settings.einkModeShort", "减少动画、翻页按钮、常驻阅读设置")}
+                  </Text>
+                </View>
+                <Switch
+                  value={einkMode}
+                  onValueChange={setEinkMode}
+                  trackColor={{ false: colors.border, true: colors.primary }}
+                  thumbColor={colors.background}
+                />
+              </View>
+            </View>
+
+            <View style={[s.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+              <View style={s.prefBlock}>
                 <Text style={[s.rowLabel, { color: colors.foreground }]}>
-                  {t("settings.einkMode", "电子墨水屏模式")}
+                  {t("settings.shelfColumns", "书架列数")}
                 </Text>
                 <Text style={[s.rowHint, { color: colors.mutedForeground }]}>
-                  {t("settings.einkModeShort", "减少动画、翻页按钮、常驻阅读设置")}
+                  {t(
+                    "settings.shelfColumnsHint",
+                    "自动会按屏幕高度选择填充最好的列数；也可以手动固定",
+                  )}
                 </Text>
+                <View style={s.choiceRow}>
+                  {(["auto", 3, 4, 5] as const).map((value) => {
+                    const active = shelfColumns === value;
+                    return (
+                      <TouchableOpacity
+                        key={String(value)}
+                        style={[
+                          s.choiceBtn,
+                          { borderColor: colors.border },
+                          active && {
+                            borderColor: colors.primary,
+                            backgroundColor: `${colors.primary}14`,
+                          },
+                        ]}
+                        onPress={() => setShelfColumns(value as ShelfColumnsPreference)}
+                        accessibilityRole="button"
+                        accessibilityState={{ selected: active }}
+                        activeOpacity={0.7}
+                      >
+                        <Text
+                          style={[
+                            s.choiceText,
+                            { color: active ? colors.primary : colors.mutedForeground },
+                            active && { fontWeight: fontWeight.semibold },
+                          ]}
+                        >
+                          {value === "auto"
+                            ? t("settings.shelfColumnsAuto", "自动")
+                            : String(value)}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
               </View>
-              <Switch
-                value={einkMode}
-                onValueChange={setEinkMode}
-                trackColor={{ false: colors.border, true: colors.primary }}
-                thumbColor={colors.background}
-              />
             </View>
-          </View>
+          </>
         ) : null}
 
         <View style={[s.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
@@ -401,6 +454,25 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
       borderWidth: 1,
       overflow: "hidden",
     },
+    prefBlock: {
+      paddingHorizontal: spacing.lg,
+      paddingVertical: 14,
+      gap: 4,
+    },
+    choiceRow: {
+      flexDirection: "row",
+      gap: 10,
+      marginTop: 10,
+    },
+    choiceBtn: {
+      flex: 1,
+      minHeight: 44,
+      alignItems: "center",
+      justifyContent: "center",
+      borderRadius: radius.lg,
+      borderWidth: 1,
+    },
+    choiceText: { fontSize: fontSize.md },
     switchRow: {
       flexDirection: "row",
       alignItems: "center",
