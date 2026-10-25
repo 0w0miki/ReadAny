@@ -1592,7 +1592,6 @@ const makeStyles = (
       right: 4,
       bottom: 6,
       zIndex: 30,
-      elevation: 6,
       alignItems: "center",
       overflow: "hidden",
       borderRadius: radius.lg,
