@@ -9,9 +9,11 @@ interface Props {
   title: string;
   subtitle?: string;
   right?: React.ReactNode;
+  /** Hide the back button when the screen is a tab root. */
+  showBack?: boolean;
 }
 
-export function SettingsHeader({ title, subtitle, right }: Props) {
+export function SettingsHeader({ title, subtitle, right, showBack = true }: Props) {
   const nav = useNavigation<NavigationProp<RootStackParamList>>();
   const colors = useColors();
   const layout = useResponsiveLayout();
@@ -32,13 +34,17 @@ export function SettingsHeader({ title, subtitle, right }: Props) {
       ]}
     >
       <View style={[styles.headerInner, { maxWidth: layout.centeredContentWidth }]}>
-        <TouchableOpacity
-          onPress={handleBack}
-          style={styles.backBtn}
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-        >
-          <ChevronLeftIcon size={20} color={colors.foreground} />
-        </TouchableOpacity>
+        {showBack ? (
+          <TouchableOpacity
+            onPress={handleBack}
+            style={styles.backBtn}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <ChevronLeftIcon size={20} color={colors.foreground} />
+          </TouchableOpacity>
+        ) : (
+          <View style={styles.backBtn} />
+        )}
         <View style={styles.titleWrap}>
           <Text style={[styles.title, { color: colors.foreground }]} numberOfLines={1}>
             {title}

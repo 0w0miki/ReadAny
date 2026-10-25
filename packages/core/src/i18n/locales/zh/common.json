@@ -69,7 +69,9 @@
     "library": "书库",
     "ai": "AI",
     "notes": "笔记",
-    "profile": "我的"
+    "profile": "我的",
+    "stats": "统计",
+    "settings": "设置"
   },
   "window": {
     "minimize": "最小化",

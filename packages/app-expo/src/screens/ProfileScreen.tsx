@@ -1,10 +1,8 @@
 import {
   BarChart3Icon,
   BookOpenIcon,
-  ChevronRightIcon,
   ClockIcon,
   FlameIcon,
-  SettingsIcon,
   TypeIcon,
 } from "@/components/ui/Icon";
 import { SyncButton } from "@/components/ui/SyncButton";
@@ -32,8 +30,8 @@ import { eventBus } from "@readany/core/utils/event-bus";
 import Constants from "expo-constants";
 /**
  * ProfileScreen — matching Tauri mobile ProfilePage exactly.
- * Features: reading stats cards, heatmap, settings menu (general/skills/about),
- * complete menu items including Skills and VectorModel.
+ * Stats-only tab: reading overview cards, compact heatmap, version/ICP footer.
+ * App settings live in the separate Settings tab (SettingsHubScreen).
  */
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -51,31 +49,6 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
-type ProfileMenuIcon = (props: {
-  size?: number;
-  color?: string;
-  strokeWidth?: number;
-}) => React.ReactNode;
-type ProfileMenuRoute = Extract<keyof RootStackParamList, "Settings">;
-type ProfileMenuItem =
-  | {
-      icon: ProfileMenuIcon;
-      label: string;
-      route: ProfileMenuRoute;
-      showDot?: boolean;
-    }
-  | {
-      icon: ProfileMenuIcon;
-      label: string;
-      url: string;
-    }
-  | {
-      icon: ProfileMenuIcon;
-      label: string;
-      action: () => void;
-      disabled?: boolean;
-    };
-
 const ICP_NUMBER = "粤ICP备2025444251号-2A";
 const ICP_URL = "https://beian.miit.gov.cn/";
 
@@ -344,24 +317,6 @@ export function ProfileScreen() {
     [overall, dailyStats, currentSession],
   );
   const isZh = i18n.language.startsWith("zh");
-  // One entry point: the tabbed settings hub. Keeps this profile page short,
-  // which matters on e-ink screens.
-  const menuSections = useMemo<{ title: string; items: ProfileMenuItem[] }[]>(
-    () => [
-      {
-        title: t("settings.title", "设置"),
-        items: [
-          {
-            icon: SettingsIcon,
-            label: t("settings.allSettings", "全部设置"),
-            route: "Settings" as const,
-          },
-        ],
-      },
-    ],
-    [t],
-  );
-
   const booksRead = liveOverall?.totalBooks ?? 0;
   const totalTime = liveOverall
     ? formatTimeLocalized(liveOverall.totalReadingTime, isZh)
@@ -404,7 +359,7 @@ export function ProfileScreen() {
       <View style={s.header}>
         <View style={s.headerTitleWrap}>
           <Text style={s.headerTitle} numberOfLines={1} maxFontSizeMultiplier={1.6}>
-            {t("profile.title", "我的")}
+            {t("tabs.stats", "统计")}
           </Text>
         </View>
         <SyncButton size={20} color={colors.mutedForeground} />
@@ -461,50 +416,6 @@ export function ProfileScreen() {
           </View>
           <MiniHeatmap dailyStats={liveDailyStats} />
         </View>
-
-        {/* Settings menu */}
-        {menuSections.map((section) => (
-          <View key={section.title} style={s.menuSection}>
-            <Text style={s.menuSectionTitle} maxFontSizeMultiplier={1.5}>
-              {section.title}
-            </Text>
-            <View style={s.menuCard}>
-              {section.items.map((item, idx) => {
-                const Icon = item.icon;
-                const itemKey =
-                  "route" in item ? item.route : "url" in item ? item.url : item.label;
-                const handlePress = () => {
-                  if ("disabled" in item && item.disabled) {
-                    return;
-                  }
-                  if ("action" in item && item.action) {
-                    item.action();
-                  } else if ("url" in item && item.url) {
-                    Linking.openURL(item.url);
-                  } else if ("route" in item) {
-                    nav.navigate(item.route);
-                  }
-                };
-                return (
-                  <TouchableOpacity
-                    key={itemKey}
-                    style={[s.menuItem, idx < section.items.length - 1 && s.menuItemBorder]}
-                    onPress={handlePress}
-                    disabled={"disabled" in item && item.disabled}
-                    activeOpacity={0.7}
-                  >
-                    <Icon size={20} color={colors.mutedForeground} />
-                    <Text style={s.menuItemLabel} maxFontSizeMultiplier={1.7}>
-                      {item.label}
-                    </Text>
-                    {"showDot" in item && item.showDot ? <View style={s.menuItemDot} /> : null}
-                    <ChevronRightIcon size={16} color={colors.mutedForeground} />
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-          </View>
-        ))}
 
         {/* Version */}
         <Text style={s.version} maxFontSizeMultiplier={1.4}>

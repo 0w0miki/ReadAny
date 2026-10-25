@@ -69,7 +69,9 @@
     "library": "Library",
     "ai": "AI",
     "notes": "Notes",
-    "profile": "Me"
+    "profile": "Me",
+    "stats": "Stats",
+    "settings": "Settings"
   },
   "window": {
     "minimize": "Minimize",

@@ -1,13 +1,20 @@
-import { BookOpenIcon, MessageSquareIcon, NotebookPenIcon, UserIcon } from "@/components/ui/Icon";
+import {
+  BarChart3Icon,
+  BookOpenIcon,
+  MessageSquareIcon,
+  NotebookPenIcon,
+  SettingsIcon,
+} from "@/components/ui/Icon";
 import { useResponsiveLayout } from "@/hooks/use-responsive-layout";
 import { ChatScreen } from "@/screens/ChatScreen";
 import { LibraryScreen } from "@/screens/LibraryScreen";
 import { NotesScreen } from "@/screens/NotesScreen";
 import { ProfileScreen } from "@/screens/ProfileScreen";
+import { SettingsHubScreen } from "@/screens/settings/SettingsHubScreen";
 import { useTheme } from "@/styles/ThemeContext";
 /**
- * TabNavigator — bottom tab bar matching the Tauri mobile app's 4 tabs.
- * Icons: BookOpen, MessageSquare, NotebookPen, User (matching BottomTabBar.tsx)
+ * TabNavigator — 5 bottom tabs: Library, Chat, Notes, Stats, Settings.
+ * Stats is the old Profile screen (reading stats only); settings live on their own tab.
  */
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { useTranslation } from "react-i18next";
@@ -19,9 +26,14 @@ export type TabParamList = {
   Chat: undefined;
   Notes: { bookId?: string } | undefined;
   Profile: undefined;
+  Settings: undefined;
 };
 
 const Tab = createBottomTabNavigator<TabParamList>();
+
+function SettingsTabScreen() {
+  return <SettingsHubScreen embedded />;
+}
 
 export function TabNavigator() {
   const { t } = useTranslation();
@@ -96,8 +108,16 @@ export function TabNavigator() {
         name="Profile"
         component={ProfileScreen}
         options={{
-          tabBarLabel: t("tabs.profile", "我的"),
-          tabBarIcon: ({ color, size }) => <UserIcon color={color} size={size} />,
+          tabBarLabel: t("tabs.stats", "统计"),
+          tabBarIcon: ({ color, size }) => <BarChart3Icon color={color} size={size} />,
+        }}
+      />
+      <Tab.Screen
+        name="Settings"
+        component={SettingsTabScreen}
+        options={{
+          tabBarLabel: t("tabs.settings", "设置"),
+          tabBarIcon: ({ color, size }) => <SettingsIcon color={color} size={size} />,
         }}
       />
     </Tab.Navigator>

@@ -177,7 +177,9 @@ export function LibraryScreen() {
   // whole number of rows so every page starts on a row boundary instead of
   // cutting cards in half.
   const gridListRef = useRef<FlatList<LibraryGridItem>>(null);
-  const [gridViewportHeight, setGridViewportHeight] = useState(0);
+  // Available height of the shelf area (list + page bar).
+  const [shelfAreaHeight, setShelfAreaHeight] = useState(0);
+  const [listViewportHeight, setListViewportHeight] = useState(0);
   const [gridContentHeight, setGridContentHeight] = useState(0);
   const [gridPage, setGridPage] = useState(1);
   const [rowPitch, setRowPitch] = useState(0);
@@ -423,24 +425,30 @@ export function LibraryScreen() {
     [activeGroupId, groupedEntries, isGroupView, visibleBooks, hasSearch],
   );
 
-  // Row-aligned pagination: one page = N complete rows.
+  // Row-aligned pagination: one page = N complete rows. The list viewport is
+  // shrunk to exactly N rows so a page never reveals a sliver of the next row
+  // (that sliver looked like "extra books" on the last page).
   const gridRowCount = Math.ceil(gridItems.length / Math.max(1, columnCount));
   // Fallback before the first row is measured: cover ratio + info block.
   const estimatedRowPitch = Math.round(gridItemWidth * (41 / 28) + 72) + gridGap;
   const effectiveRowPitch = rowPitch > 0 ? rowPitch : estimatedRowPitch;
+  // Reserve room for the page nav bar below the list.
+  const pageNavReserve = einkMode ? 56 : 0;
   const gridRowsPerPage = Math.max(
     1,
-    Math.floor((gridViewportHeight - 8) / Math.max(1, effectiveRowPitch)),
+    Math.floor((shelfAreaHeight - pageNavReserve - 8) / Math.max(1, effectiveRowPitch)),
   );
   const gridPageHeight = gridRowsPerPage * effectiveRowPitch;
-  const maxGridOffset = Math.max(0, gridContentHeight - gridViewportHeight);
-  // A short last page would otherwise create "ghost" pages that never scroll.
-  const reachablePageCount =
-    gridPageHeight > 0 ? Math.floor(maxGridOffset / gridPageHeight) + 1 : 1;
-  const gridPageCount = Math.max(
-    1,
-    Math.min(Math.ceil(gridRowCount / gridRowsPerPage), reachablePageCount),
-  );
+  const gridPageCount = Math.max(1, Math.ceil(gridRowCount / gridRowsPerPage));
+  const paginateShelf = einkMode && gridPageCount > 1;
+  const gridViewport = paginateShelf ? gridPageHeight : listViewportHeight;
+  const maxGridOffset = Math.max(0, gridContentHeight - gridViewport);
+  // Extra bottom padding lets the last page align its first row to the top.
+  const gridContentPaddingBottom =
+    24 +
+    (paginateShelf
+      ? Math.max(0, gridPageCount * gridPageHeight - gridRowCount * effectiveRowPitch + 24)
+      : 0);
   // Keep the indicator in range when the list shrinks (filter / delete).
   const currentGridPage = Math.min(gridPage, gridPageCount);
   const goToGridPage = useCallback(
@@ -1154,7 +1162,10 @@ export function LibraryScreen() {
             </Text>
           )}
           {isLoaded && !isEmpty && (
-            <View style={s.gridListWrap}>
+            <View
+              style={s.gridListWrap}
+              onLayout={(event) => setShelfAreaHeight(event.nativeEvent.layout.height)}
+            >
               <FlatList
                 ref={gridListRef}
                 data={gridItems}
@@ -1164,14 +1175,25 @@ export function LibraryScreen() {
                   item.type === "group" ? `group-${item.group.id}` : item.book.id
                 }
                 key={`library-grid-${columnCount}`}
-                style={s.gridList}
+                style={[
+                  s.gridList,
+                  paginateShelf && {
+                    flexGrow: 0,
+                    flexShrink: 0,
+                    flexBasis: gridPageHeight,
+                    height: gridPageHeight,
+                  },
+                ]}
                 numColumns={columnCount}
                 columnWrapperStyle={s.gridRow}
-                contentContainerStyle={s.gridContent}
+                contentContainerStyle={[
+                  s.gridContent,
+                  { paddingBottom: gridContentPaddingBottom },
+                ]}
                 showsVerticalScrollIndicator={false}
                 keyboardShouldPersistTaps="handled"
                 keyboardDismissMode="on-drag"
-                onLayout={(event) => setGridViewportHeight(event.nativeEvent.layout.height)}
+                onLayout={(event) => setListViewportHeight(event.nativeEvent.layout.height)}
                 onContentSizeChange={(_width, height) => setGridContentHeight(height)}
                 onScroll={handleGridScroll}
                 scrollEventThrottle={32}
@@ -1499,6 +1521,7 @@ const makeStyles = (
     gridListWrap: { flex: 1, width: "100%" },
     gridList: { flex: 1 },
     pageNavBar: {
+      marginTop: "auto",
       flexDirection: "row",
       alignItems: "center",
       justifyContent: "space-between",

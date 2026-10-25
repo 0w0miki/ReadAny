@@ -94,7 +94,7 @@ const TAB_KEYS: { key: TabKey; labelKey: string; fallback: string }[] = [
   { key: "system", labelKey: "settings.tabs.system", fallback: "系统" },
 ];
 
-export function SettingsHubScreen() {
+export function SettingsHubScreen({ embedded = false }: { embedded?: boolean } = {}) {
   const colors = useColors();
   const s = useMemo(() => makeStyles(colors), [colors]);
   const layout = useResponsiveLayout();
@@ -254,7 +254,7 @@ export function SettingsHubScreen() {
 
   return (
     <SafeAreaView style={[s.container, { backgroundColor: colors.background }]} edges={["top"]}>
-      <SettingsHeader title={t("settings.title", "设置")} />
+      <SettingsHeader title={t("settings.title", "设置")} showBack={!embedded} />
 
       {/* Tabs */}
       <View style={[s.tabBarWrap, { borderBottomColor: colors.border }]}>
