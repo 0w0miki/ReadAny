@@ -6,6 +6,7 @@ import { memo, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Image, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { makeStyles as makeBookCardStyles } from "./book-card-styles";
+import { useEinkMode } from "@/hooks/use-eink-mode";
 
 interface GroupCardProps {
   group: BookGroup;
@@ -148,7 +149,8 @@ export const GroupCard = memo(function GroupCard({
 }: GroupCardProps) {
   const colors = useColors();
   const { t } = useTranslation();
-  const bookStyles = makeBookCardStyles(colors, cardWidth);
+  const einkMode = useEinkMode();
+  const bookStyles = makeBookCardStyles(colors, cardWidth, einkMode);
   const previewBooks = useMemo(
     () =>
       [...books]

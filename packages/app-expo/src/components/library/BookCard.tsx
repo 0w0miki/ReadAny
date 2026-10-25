@@ -20,6 +20,7 @@ import {
 } from "react-native";
 import { BookCardActionSheet } from "./BookCardActionSheet";
 import { makeStyles } from "./book-card-styles";
+import { useEinkMode } from "@/hooks/use-eink-mode";
 
 const AnimatedLoader = () => {
   const spinValue = useRef(new Animated.Value(0)).current;
@@ -83,7 +84,8 @@ export const BookCard = memo(function BookCard({
   onLongPress,
 }: BookCardProps) {
   const colors = useColors();
-  const s = makeStyles(colors, cardWidth);
+  const einkMode = useEinkMode();
+  const s = makeStyles(colors, cardWidth, einkMode);
   const { t } = useTranslation();
   const [imageError, setImageError] = useState(false);
   const [showActions, setShowActions] = useState(false);

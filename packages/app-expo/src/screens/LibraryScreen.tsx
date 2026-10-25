@@ -1,4 +1,8 @@
 import { BookCard } from "@/components/library/BookCard";
+import {
+  BOOK_CARD_INFO_HEIGHT,
+  getBookCardMetrics,
+} from "@/components/library/book-card-styles";
 import { GroupCard } from "@/components/library/GroupCard";
 import { GroupPickerSheet } from "@/components/library/GroupPickerSheet";
 import { type ExtractorRef, ExtractorWebView } from "@/components/rag/ExtractorWebView";
@@ -67,7 +71,6 @@ import {
   FlatList,
   Image,
   Keyboard,
-  type LayoutChangeEvent,
   Modal,
   Platform,
   Pressable,
@@ -182,18 +185,6 @@ export function LibraryScreen() {
   const [listViewportHeight, setListViewportHeight] = useState(0);
   const [gridContentHeight, setGridContentHeight] = useState(0);
   const [gridPage, setGridPage] = useState(1);
-  const [rowPitch, setRowPitch] = useState(0);
-  // Measure the tallest rendered row so page boundaries land on row edges.
-  const handleGridItemLayout = useCallback(
-    (event: LayoutChangeEvent) => {
-      const pitch = event.nativeEvent.layout.height + gridGap;
-      setRowPitch((prev) => (pitch > prev + 1 ? pitch : prev));
-    },
-    [gridGap],
-  );
-  useEffect(() => {
-    setRowPitch(0);
-  }, [gridItemWidth]);
 
   const [tagSheetOpen, setTagSheetOpen] = useState(false);
   const [tagSheetBook, setTagSheetBook] = useState<Book | null>(null);
@@ -425,20 +416,21 @@ export function LibraryScreen() {
     [activeGroupId, groupedEntries, isGroupView, visibleBooks, hasSearch],
   );
 
-  // Row-aligned pagination: one page = N complete rows. The list viewport is
-  // shrunk to exactly N rows so a page never reveals a sliver of the next row
-  // (that sliver looked like "extra books" on the last page).
+  // Row-aligned pagination: one page = N complete rows. Every shelf cell has
+  // the same height (cover + fixed info block), so page offsets are exact row
+  // multiples and no page can reveal a sliver of the next row.
   const gridRowCount = Math.ceil(gridItems.length / Math.max(1, columnCount));
-  // Fallback before the first row is measured: cover ratio + info block.
-  const estimatedRowPitch = Math.round(gridItemWidth * (41 / 28) + 72) + gridGap;
-  const effectiveRowPitch = rowPitch > 0 ? rowPitch : estimatedRowPitch;
+  const { coverHeight } = getBookCardMetrics(gridItemWidth);
+  const gridRowHeight = coverHeight + BOOK_CARD_INFO_HEIGHT;
   // Reserve room for the page nav bar below the list.
   const pageNavReserve = einkMode ? 56 : 0;
+  const shelfAvailable = Math.max(gridRowHeight, shelfAreaHeight - pageNavReserve - 8);
   const gridRowsPerPage = Math.max(
     1,
-    Math.floor((shelfAreaHeight - pageNavReserve - 8) / Math.max(1, effectiveRowPitch)),
+    Math.floor(shelfAvailable / (gridRowHeight + gridGap)),
   );
-  const gridPageHeight = gridRowsPerPage * effectiveRowPitch;
+  const gridRowPitch = gridRowHeight + gridGap;
+  const gridPageHeight = gridRowsPerPage * gridRowPitch;
   const gridPageCount = Math.max(1, Math.ceil(gridRowCount / gridRowsPerPage));
   const paginateShelf = einkMode && gridPageCount > 1;
   const gridViewport = paginateShelf ? gridPageHeight : listViewportHeight;
@@ -447,7 +439,7 @@ export function LibraryScreen() {
   const gridContentPaddingBottom =
     24 +
     (paginateShelf
-      ? Math.max(0, gridPageCount * gridPageHeight - gridRowCount * effectiveRowPitch + 24)
+      ? Math.max(0, gridPageCount * gridPageHeight - gridRowCount * gridRowPitch + 24)
       : 0);
   // Keep the indicator in range when the list shrinks (filter / delete).
   const currentGridPage = Math.min(gridPage, gridPageCount);
@@ -818,7 +810,7 @@ export function LibraryScreen() {
 
   const renderGridItem = useCallback(
     ({ item }: { item: LibraryGridItem }) => (
-      <View style={s.gridItem} onLayout={handleGridItemLayout}>
+      <View style={s.gridItem}>
         {item.type === "group" ? (
           <GroupCard
             group={item.group}
@@ -851,7 +843,6 @@ export function LibraryScreen() {
     [
       enterSelectionMode,
       gridItemWidth,
-      handleGridItemLayout,
       handleGroupLongPress,
       handleManageTags,
       handleShowDetails,
@@ -1188,7 +1179,10 @@ export function LibraryScreen() {
                 columnWrapperStyle={s.gridRow}
                 contentContainerStyle={[
                   s.gridContent,
-                  { paddingBottom: gridContentPaddingBottom },
+                  {
+                    paddingTop: paginateShelf ? 0 : 4,
+                    paddingBottom: gridContentPaddingBottom,
+                  },
                 ]}
                 showsVerticalScrollIndicator={false}
                 keyboardShouldPersistTaps="handled"

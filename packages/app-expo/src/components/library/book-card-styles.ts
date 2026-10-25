@@ -1,13 +1,23 @@
 import { type ThemeColors, fontSize, fontWeight, radius } from "@/styles/theme";
 import { StyleSheet } from "react-native";
 
+/**
+ * Fixed height of the info block below the cover. Keeping it uniform makes every
+ * shelf row the same height, which lets the e-ink library paginate by whole rows.
+ */
+export const BOOK_CARD_INFO_HEIGHT = 68;
+
 export function getBookCardMetrics(cardWidth: number) {
   const coverWidth = cardWidth;
   const coverHeight = coverWidth * (41 / 28);
   return { coverWidth, coverHeight };
 }
 
-export const makeStyles = (colors: ThemeColors, cardWidth: number) => {
+export const makeStyles = (
+  colors: ThemeColors,
+  cardWidth: number,
+  uniformRowHeight = false,
+) => {
   const { coverWidth, coverHeight } = getBookCardMetrics(cardWidth);
 
   return StyleSheet.create({
@@ -114,18 +124,28 @@ export const makeStyles = (colors: ThemeColors, cardWidth: number) => {
       borderWidth: 1,
       borderColor: "rgba(255,255,255,0.16)",
     },
-    infoWrap: { paddingTop: 6, paddingHorizontal: 1 },
+    infoWrap: uniformRowHeight
+      ? {
+          paddingTop: 6,
+          paddingHorizontal: 1,
+          height: BOOK_CARD_INFO_HEIGHT,
+          overflow: "hidden",
+        }
+      : { paddingTop: 6, paddingHorizontal: 1 },
     bookTitle: { fontSize: 13, fontWeight: fontWeight.semibold, color: colors.foreground, lineHeight: 14 },
     bookAuthor: { fontSize: 10, color: colors.mutedForeground, lineHeight: 14, marginTop: 1 },
-    tagsRow: { flexDirection: "row", flexWrap: "wrap", gap: 3, marginTop: 3 },
-    tagBadge: { backgroundColor: `${colors.muted}`, borderRadius: radius.full, paddingHorizontal: 6, paddingVertical: 1 },
-    tagText: { fontSize: 8, color: colors.mutedForeground },
-    tagBadgeUncategorized: { backgroundColor: `${colors.muted}80`, borderRadius: radius.full, paddingHorizontal: 6, paddingVertical: 1 },
+    tagsRow: uniformRowHeight
+      ? { flexDirection: "row", flexWrap: "nowrap", gap: 3, marginTop: 3, height: 13, overflow: "hidden" }
+      : { flexDirection: "row", flexWrap: "wrap", gap: 3, marginTop: 3 },
+    tagBadge: { backgroundColor: `${colors.muted}`, borderRadius: radius.full, paddingHorizontal: 6, paddingVertical: 1, ...(uniformRowHeight ? { height: 13 } : {}) },
+    tagText: { fontSize: 8, lineHeight: 10, color: colors.mutedForeground },
+    tagBadgeUncategorized: { backgroundColor: `${colors.muted}80`, borderRadius: radius.full, paddingHorizontal: 6, paddingVertical: 1, ...(uniformRowHeight ? { height: 13 } : {}) },
     tagTextUncategorized: { fontSize: 8, color: `${colors.mutedForeground}99` },
-    tagOverflow: { fontSize: 8, color: `${colors.mutedForeground}99`, alignSelf: "center" },
+    tagOverflow: { fontSize: 8, lineHeight: 10, color: `${colors.mutedForeground}99`, alignSelf: "center" },
     statusRow: {
       flexDirection: "row", alignItems: "center",
       justifyContent: "space-between", marginTop: 3, minHeight: 14,
+      ...(uniformRowHeight ? { height: 14 } : {}),
     },
     progressText: { fontSize: 9, color: colors.mutedForeground, fontVariant: ["tabular-nums"] },
     completeText: { fontSize: 9, fontWeight: fontWeight.medium, color: "#16a34a" },
