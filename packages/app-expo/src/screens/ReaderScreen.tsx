@@ -312,6 +312,7 @@ export function ReaderScreen({ route, navigation }: Props) {
   const updateReadSettings = useSettingsStore((s) => s.updateReadSettings);
   const translationConfig = useSettingsStore((s) => s.translationConfig);
   const aiConfig = useSettingsStore((s) => s.aiConfig);
+  const einkMode = useSettingsStore((s) => s.einkMode);
   const showTopTitleProgress = readSettings.showTopTitleProgress !== false;
   const showBottomTimeBattery = readSettings.showBottomTimeBattery !== false;
 
@@ -538,29 +539,43 @@ export function ReaderScreen({ route, navigation }: Props) {
   }, []);
 
   // Controls toggle — declared before bridge so onTap can reference it without TS error
+  const animateToolbar = useCallback(
+    (show: boolean) => {
+      const toValue = show ? 0 : TOOLBAR_HIDE_OFFSET;
+      if (einkMode) {
+        // Instant reposition: no tween on an e-ink panel.
+        toolbarAnim.setValue(toValue);
+        return;
+      }
+      Animated.timing(toolbarAnim, {
+        toValue,
+        duration: 180,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }).start();
+    },
+    [einkMode, toolbarAnim],
+  );
+
   const toggleControls = useCallback(() => {
     const willShow = !showControls;
     setShowControls(willShow);
-    Animated.timing(toolbarAnim, {
-      toValue: willShow ? 0 : TOOLBAR_HIDE_OFFSET,
-      duration: 180,
-      easing: Easing.out(Easing.cubic),
-      useNativeDriver: true,
-    }).start();
+    animateToolbar(willShow);
 
-    if (willShow) {
-      if (controlsTimer.current) clearTimeout(controlsTimer.current);
+    if (controlsTimer.current) {
+      clearTimeout(controlsTimer.current);
+      controlsTimer.current = null;
+    }
+    // E-ink: keep the toolbar visible until the user taps it away. The default
+    // 4s timeout expires while the panel is still refreshing, which is why the
+    // settings entry felt unreachable in paginated mode.
+    if (willShow && !einkMode) {
       controlsTimer.current = setTimeout(() => {
         setShowControls(false);
-        Animated.timing(toolbarAnim, {
-          toValue: TOOLBAR_HIDE_OFFSET,
-          duration: 180,
-          easing: Easing.out(Easing.cubic),
-          useNativeDriver: true,
-        }).start();
+        animateToolbar(false);
       }, CONTROLS_TIMEOUT);
     }
-  }, [showControls, toolbarAnim]);
+  }, [showControls, animateToolbar, einkMode]);
 
   // Reader bridge
   const bridge = useReaderBridge({
@@ -578,6 +593,7 @@ export function ReaderScreen({ route, navigation }: Props) {
     onLoaded: () => {
       setLoading(false);
       const settings = useSettingsStore.getState().readSettings;
+      const einkModeNow = useSettingsStore.getState().einkMode;
       const { fonts, selectedFontId: selId } = useFontStore.getState();
       const fontCSS = buildCustomFontFaceCSS(fonts, selId, fileServerRef.current);
       const fontFamily = selId ? fonts.find((f) => f.id === selId)?.fontFamily : "";
@@ -595,7 +611,8 @@ export function ReaderScreen({ route, navigation }: Props) {
         useBookFonts: settings.useBookFonts,
         viewMode: settings.viewMode,
         paginatedLayout: settings.paginatedLayout,
-        smoothReading: settings.smoothReading === true,
+        smoothReading: einkModeNow ? false : settings.smoothReading === true,
+        reduceMotion: einkModeNow,
         customFontFaceCSS: fontCSS,
         customFontFamily: fontFamily ?? "",
       });
@@ -819,6 +836,11 @@ export function ReaderScreen({ route, navigation }: Props) {
     onBookmarkPull: ({ offset, active }) => {
       if (active) {
         readerPullAnim.setValue(offset);
+        return;
+      }
+
+      if (useSettingsStore.getState().einkMode) {
+        readerPullAnim.setValue(0);
         return;
       }
 
@@ -1145,7 +1167,10 @@ export function ReaderScreen({ route, navigation }: Props) {
             useBookFonts: readSettings.useBookFonts,
             viewMode: readSettings.viewMode,
             paginatedLayout: readSettings.paginatedLayout,
-            smoothReading: readSettings.smoothReading === true,
+            smoothReading: useSettingsStore.getState().einkMode
+              ? false
+              : readSettings.smoothReading === true,
+            reduceMotion: useSettingsStore.getState().einkMode,
           },
         });
 
@@ -1320,6 +1345,7 @@ export function ReaderScreen({ route, navigation }: Props) {
       }
       if (cancelled) return;
       setShowControls(false);
+      animateToolbar(false);
       setShowTTS(true);
       navigation.setParams({ bookId, openTTS: undefined });
     };
@@ -1777,9 +1803,9 @@ export function ReaderScreen({ route, navigation }: Props) {
         </Animated.View>
       )}
 
-      {!showSearch && !showControls && showBottomTimeBattery && (
+      {!showSearch && !showControls && (showBottomTimeBattery || einkMode) && (
         <View
-          pointerEvents="none"
+          pointerEvents={einkMode ? "box-none" : "none"}
           style={[
             s.bottomInfoBar,
             {
@@ -1789,16 +1815,33 @@ export function ReaderScreen({ route, navigation }: Props) {
             },
           ]}
         >
-          <Text style={s.bottomInfoText}>{readerClock}</Text>
+          {showBottomTimeBattery && <Text style={s.bottomInfoText}>{readerClock}</Text>}
           <View style={s.bottomInfoSide}>
-            <BatteryIcon
-              width={22}
-              height={11}
-              color={colors.mutedForeground}
-              level={batteryLevel}
-              charging={isBatteryCharging}
-            />
-            <Text style={s.bottomInfoText}>{batteryLabel}</Text>
+            {einkMode && (
+              // Always-available settings entry: one tap from the reading page,
+              // without waiting for the auto-hiding toolbar.
+              <TouchableOpacity
+                onPress={() => setShowSettings(true)}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                style={s.einkSettingsBtn}
+                accessibilityRole="button"
+                accessibilityLabel={t("reader.settings", "阅读设置")}
+              >
+                <SettingsIcon size={16} color={colors.mutedForeground} />
+              </TouchableOpacity>
+            )}
+            {showBottomTimeBattery && (
+              <>
+                <BatteryIcon
+                  width={22}
+                  height={11}
+                  color={colors.mutedForeground}
+                  level={batteryLevel}
+                  charging={isBatteryCharging}
+                />
+                <Text style={s.bottomInfoText}>{batteryLabel}</Text>
+              </>
+            )}
           </View>
         </View>
       )}
@@ -1874,12 +1917,7 @@ export function ReaderScreen({ route, navigation }: Props) {
                 onPress={() => {
                   setShowSearch(true);
                   setShowControls(false);
-                  Animated.timing(toolbarAnim, {
-                    toValue: TOOLBAR_HIDE_OFFSET,
-                    duration: 180,
-                    easing: Easing.out(Easing.cubic),
-                    useNativeDriver: true,
-                  }).start();
+                  animateToolbar(false);
                 }}
               >
                 <SearchIcon size={bottomDockIconSize} color={colors.foreground} />
@@ -1971,12 +2009,7 @@ export function ReaderScreen({ route, navigation }: Props) {
                 setShowSearch(false);
                 search.clearSearch();
                 setShowControls(true);
-                Animated.timing(toolbarAnim, {
-                  toValue: 0,
-                  duration: 180,
-                  easing: Easing.out(Easing.cubic),
-                  useNativeDriver: true,
-                }).start();
+                animateToolbar(true);
               }}
             >
               <XIcon size={16} color={colors.mutedForeground} />

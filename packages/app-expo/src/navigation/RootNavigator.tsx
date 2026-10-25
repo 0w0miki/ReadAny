@@ -52,7 +52,7 @@ export type RootStackParamList = {
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
 export function RootNavigator() {
-  const { hasCompletedOnboarding, _hasHydrated } = useSettingsStore();
+  const { hasCompletedOnboarding, _hasHydrated, einkMode } = useSettingsStore();
 
   const showOnboarding = !hasCompletedOnboarding && _hasHydrated;
 
@@ -60,7 +60,13 @@ export function RootNavigator() {
 
   return (
     <>
-      <Stack.Navigator screenOptions={{ headerShown: false }}>
+      <Stack.Navigator
+        screenOptions={{
+          headerShown: false,
+          // E-ink screens refresh slowly, so skip the slide transition entirely.
+          animation: einkMode ? "none" : "slide_from_right",
+        }}
+      >
         {showOnboarding ? (
           <Stack.Screen name="Onboarding" component={OnboardingNavigator} />
         ) : (
@@ -69,37 +75,30 @@ export function RootNavigator() {
             <Stack.Screen
               name="Reader"
               component={ReaderScreen}
-              options={{ animation: "slide_from_right" }}
             />
             <Stack.Screen
               name="BookDetails"
               component={BookDetailsScreen}
-              options={{ animation: "slide_from_right" }}
             />
             <Stack.Screen
               name="BookChat"
               component={BookChatScreen}
-              options={{ animation: "slide_from_right" }}
             />
             <Stack.Screen
               name="Stats"
               component={StatsScreen}
-              options={{ animation: "slide_from_right" }}
             />
             <Stack.Screen
               name="Badges"
               component={BadgesScreen}
-              options={{ animation: "slide_from_right" }}
             />
             <Stack.Screen
               name="Skills"
               component={SkillsScreen}
-              options={{ animation: "slide_from_right" }}
             />
             <Stack.Screen
               name="VectorModelSettings"
               component={VectorModelSettingsScreen}
-              options={{ animation: "slide_from_right" }}
             />
             <Stack.Screen name="AppearanceSettings" component={AppearanceSettingsScreen} />
             <Stack.Screen name="AISettings" component={AISettingsScreen} />
@@ -111,22 +110,18 @@ export function RootNavigator() {
             <Stack.Screen
               name="FeedbackDetail"
               component={FeedbackDetailScreen}
-              options={{ animation: "slide_from_right" }}
             />
             <Stack.Screen
               name="FontSettings"
               component={FontSettingsScreen}
-              options={{ animation: "slide_from_right" }}
             />
             <Stack.Screen
               name="WebDavImportBrowser"
               component={WebDavImportBrowserScreen}
-              options={{ animation: "slide_from_right" }}
             />
             <Stack.Screen
               name="FullScreenNotes"
               component={FullScreenNotesScreen}
-              options={{ animation: "slide_from_right" }}
             />
           </>
         )}

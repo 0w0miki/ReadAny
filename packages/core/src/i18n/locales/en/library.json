@@ -6,6 +6,8 @@
     "sortAuthor": "Author",
     "sortProgress": "Progress",
     "searchPlaceholder": "Search books...",
+    "pageUp": "Previous page",
+    "pageDown": "Next page",
     "all": "All",
     "empty": "No books yet",
     "emptyHint": "Tap the + button to import your first book",

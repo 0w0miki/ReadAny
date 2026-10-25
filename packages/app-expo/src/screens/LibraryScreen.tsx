@@ -6,7 +6,9 @@ import {
   ArrowDownAZIcon,
   ArrowUpAZIcon,
   CheckCheckIcon,
+  ChevronDownIcon,
   ChevronLeftIcon,
+  ChevronUpIcon,
   ClockIcon,
   DatabaseIcon,
   FolderInputIcon,
@@ -20,6 +22,7 @@ import {
   XIcon,
 } from "@/components/ui/Icon";
 import { SyncButton } from "@/components/ui/SyncButton";
+import { useEinkMode } from "@/hooks/use-eink-mode";
 import { useResponsiveLayout } from "@/hooks/use-responsive-layout";
 import { openMobileBook } from "@/lib/library/open-mobile-book";
 import { setCallback, setExtractorRef } from "@/lib/rag/auto-vectorize-service";
@@ -167,6 +170,42 @@ export function LibraryScreen() {
   const [showSort, setShowSort] = useState(false);
   const searchAnim = useRef(new Animated.Value(0)).current;
   const searchInputRef = useRef<TextInput>(null);
+  const einkMode = useEinkMode();
+
+  // Paged shelf: on e-ink, swiping a long grid is unreliable, so offer explicit
+  // previous/next page buttons that jump by one viewport.
+  const gridListRef = useRef<FlatList<LibraryGridItem>>(null);
+  const [gridViewportHeight, setGridViewportHeight] = useState(0);
+  const [gridContentHeight, setGridContentHeight] = useState(0);
+  const [gridPage, setGridPage] = useState(1);
+  const gridPageCount =
+    gridViewportHeight > 0 && gridContentHeight > 0
+      ? Math.max(1, Math.ceil((gridContentHeight - 2) / gridViewportHeight))
+      : 1;
+  // Keep the indicator in range when the list shrinks (filter / delete).
+  const currentGridPage = Math.min(gridPage, gridPageCount);
+  const goToGridPage = useCallback(
+    (page: number) => {
+      const target = Math.max(1, Math.min(gridPageCount, page));
+      gridListRef.current?.scrollToOffset({
+        offset: (target - 1) * gridViewportHeight,
+        animated: !einkMode,
+      });
+      setGridPage(target);
+    },
+    [einkMode, gridPageCount, gridViewportHeight],
+  );
+  // Only re-render when the page number actually changes; the raw scroll event
+  // fires every 32ms and this screen is heavy on slow devices.
+  const handleGridScroll = useCallback(
+    (event: { nativeEvent: { contentOffset: { y: number } } }) => {
+      if (gridViewportHeight <= 0) return;
+      const raw = Math.floor(event.nativeEvent.contentOffset.y / gridViewportHeight) + 1;
+      const next = Math.min(gridPageCount, Math.max(1, raw));
+      setGridPage((prev) => (prev === next ? prev : next));
+    },
+    [gridPageCount, gridViewportHeight],
+  );
 
   const [tagSheetOpen, setTagSheetOpen] = useState(false);
   const [tagSheetBook, setTagSheetBook] = useState<Book | null>(null);
@@ -238,17 +277,25 @@ export function LibraryScreen() {
 
   const openSearch = useCallback(() => {
     setShowSearch(true);
-    Animated.timing(searchAnim, { toValue: 1, duration: 300, useNativeDriver: false }).start(() => {
+    Animated.timing(searchAnim, {
+      toValue: 1,
+      duration: einkMode ? 0 : 300,
+      useNativeDriver: false,
+    }).start(() => {
       searchInputRef.current?.focus();
     });
-  }, [searchAnim]);
+  }, [einkMode, searchAnim]);
 
   const closeSearch = useCallback(() => {
-    Animated.timing(searchAnim, { toValue: 0, duration: 250, useNativeDriver: false }).start(() => {
+    Animated.timing(searchAnim, {
+      toValue: 0,
+      duration: einkMode ? 0 : 250,
+      useNativeDriver: false,
+    }).start(() => {
       setShowSearch(false);
       setFilter({ search: "" });
     });
-  }, [searchAnim, setFilter]);
+  }, [einkMode, searchAnim, setFilter]);
 
   useEffect(() => {
     loadBooks();
@@ -1079,21 +1126,59 @@ export function LibraryScreen() {
             </Text>
           )}
           {isLoaded && !isEmpty && (
-            <FlatList
-              data={gridItems}
-              renderItem={renderGridItem}
-              extraData={{ vectorProgress, vectorizingBookId }}
-              keyExtractor={(item) =>
-                item.type === "group" ? `group-${item.group.id}` : item.book.id
-              }
-              key={`library-grid-${columnCount}`}
-              numColumns={columnCount}
-              columnWrapperStyle={s.gridRow}
-              contentContainerStyle={s.gridContent}
-              showsVerticalScrollIndicator={false}
-              keyboardShouldPersistTaps="handled"
-              keyboardDismissMode="on-drag"
-            />
+            <View style={s.gridListWrap}>
+              <FlatList
+                ref={gridListRef}
+                data={gridItems}
+                renderItem={renderGridItem}
+                extraData={{ vectorProgress, vectorizingBookId }}
+                keyExtractor={(item) =>
+                  item.type === "group" ? `group-${item.group.id}` : item.book.id
+                }
+                key={`library-grid-${columnCount}`}
+                style={s.gridList}
+                numColumns={columnCount}
+                columnWrapperStyle={s.gridRow}
+                contentContainerStyle={s.gridContent}
+                showsVerticalScrollIndicator={false}
+                keyboardShouldPersistTaps="handled"
+                keyboardDismissMode="on-drag"
+                onLayout={(event) => setGridViewportHeight(event.nativeEvent.layout.height)}
+                onContentSizeChange={(_width, height) => setGridContentHeight(height)}
+                onScroll={handleGridScroll}
+                scrollEventThrottle={32}
+              />
+              {einkMode && gridPageCount > 1 && (
+                <View style={s.pageNavBar}>
+                  <Text style={s.pageNavLabel}>
+                    {currentGridPage} / {gridPageCount}
+                  </Text>
+                  <View style={s.pageNavActions}>
+                    <TouchableOpacity
+                      style={[s.pageNavBtn, currentGridPage <= 1 && s.pageNavBtnDisabled]}
+                      onPress={() => goToGridPage(currentGridPage - 1)}
+                      disabled={currentGridPage <= 1}
+                      accessibilityRole="button"
+                      accessibilityLabel={t("library.pageUp", "上一页")}
+                    >
+                      <ChevronUpIcon size={20} color={colors.foreground} />
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[
+                        s.pageNavBtn,
+                        currentGridPage >= gridPageCount && s.pageNavBtnDisabled,
+                      ]}
+                      onPress={() => goToGridPage(currentGridPage + 1)}
+                      disabled={currentGridPage >= gridPageCount}
+                      accessibilityRole="button"
+                      accessibilityLabel={t("library.pageDown", "下一页")}
+                    >
+                      <ChevronDownIcon size={20} color={colors.foreground} />
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              )}
+            </View>
           )}
         </View>
       </View>
@@ -1383,6 +1468,34 @@ const makeStyles = (
     gridRow: { gap: layout.gridGap, justifyContent: "flex-start" },
     gridContent: { paddingBottom: 24, paddingTop: 4, width: "100%" },
     gridItem: { width: layout.gridItemWidth, marginBottom: layout.gridGap },
+    gridListWrap: { flex: 1, width: "100%" },
+    gridList: { flex: 1 },
+    pageNavBar: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      paddingHorizontal: 4,
+      paddingVertical: 6,
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: colors.border,
+    },
+    pageNavActions: { flexDirection: "row", alignItems: "center", gap: 10 },
+    pageNavLabel: {
+      fontSize: fontSize.sm,
+      color: colors.mutedForeground,
+      fontVariant: ["tabular-nums"],
+    },
+    pageNavBtn: {
+      width: 40,
+      height: 40,
+      borderRadius: 20,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: colors.card,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    pageNavBtnDisabled: { opacity: 0.3 },
     groupModalKeyboardRoot: { flex: 1 },
     groupModalOverlay: {
       flex: 1,

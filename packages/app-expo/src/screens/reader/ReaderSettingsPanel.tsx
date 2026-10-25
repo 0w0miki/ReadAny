@@ -3,6 +3,7 @@
  */
 import { XIcon } from "@/components/ui/Icon";
 import { useResponsiveLayout } from "@/hooks/use-responsive-layout";
+import { useEinkMode, useModalAnimationType } from "@/hooks/use-eink-mode";
 import { useColors } from "@/styles/theme";
 import type { ReadSettings } from "@readany/core/types";
 import { ActivityIndicator, Modal, Platform, Pressable, ScrollView, Text, TouchableOpacity, View } from "react-native";
@@ -28,6 +29,8 @@ export function ReaderSettingsPanel({ visible, readSettings, bookId, onClose, on
   const insets = useSafeAreaInsets();
   const layout = useResponsiveLayout();
   const { t } = useTranslation();
+  const einkMode = useEinkMode();
+  const modalAnimationType = useModalAnimationType("slide");
 
   const customFonts = useFontStore((s) => s.fonts);
   const selectedFontId = useFontStore((s) => s.selectedFontId);
@@ -50,7 +53,7 @@ export function ReaderSettingsPanel({ visible, readSettings, bookId, onClose, on
     <Modal
       visible={visible}
       transparent
-      animationType="slide"
+      animationType={modalAnimationType}
       onRequestClose={onClose}
     >
       <Pressable style={s.modalBackdrop} onPress={onClose} />
@@ -262,23 +265,26 @@ export function ReaderSettingsPanel({ visible, readSettings, bookId, onClose, on
               </TouchableOpacity>
             </View>
           </View>
-          {/* Smooth reading: animated page turns + scroll inertia */}
-          <View style={s.settingRow}>
-            <View style={s.settingLabelBlock}>
-              <Text style={s.settingLabel}>{t("settings.smoothReading")}</Text>
-              <Text style={s.settingHint}>
-                {t("settings.smoothReadingDesc", "开启翻页过渡动画与滚动惯性，关闭可提升低性能设备流畅度")}
-              </Text>
+          {/* Smooth reading: animated page turns + scroll inertia. Hidden on
+              e-ink because the mode forces it off. */}
+          {!einkMode && (
+            <View style={s.settingRow}>
+              <View style={s.settingLabelBlock}>
+                <Text style={s.settingLabel}>{t("settings.smoothReading")}</Text>
+                <Text style={s.settingHint}>
+                  {t("settings.smoothReadingDesc", "开启翻页过渡动画与滚动惯性，关闭可提升低性能设备流畅度")}
+                </Text>
+              </View>
+              <TouchableOpacity
+                style={[s.settingToggleBtn, !!smoothReading && s.settingToggleBtnActive]}
+                onPress={() => onUpdateSetting("smoothReading", !smoothReading)}
+              >
+                <Text style={[s.settingToggleText, !!smoothReading && s.settingToggleTextActive]}>
+                  {smoothReading ? t("settings.enabled") : t("settings.disabled")}
+                </Text>
+              </TouchableOpacity>
             </View>
-            <TouchableOpacity
-              style={[s.settingToggleBtn, !!smoothReading && s.settingToggleBtnActive]}
-              onPress={() => onUpdateSetting("smoothReading", !smoothReading)}
-            >
-              <Text style={[s.settingToggleText, !!smoothReading && s.settingToggleTextActive]}>
-                {smoothReading ? t("settings.enabled") : t("settings.disabled")}
-              </Text>
-            </TouchableOpacity>
-          </View>
+          )}
           {Platform.OS === "android" && (
             <View style={s.settingRow}>
               <View style={s.settingLabelBlock}>

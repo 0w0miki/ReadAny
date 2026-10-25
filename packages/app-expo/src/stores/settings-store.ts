@@ -19,11 +19,19 @@ export interface SettingsState {
   settingsUpdatedAt: number;
   hasCompletedOnboarding: boolean;
   showOnboardingGuide: boolean;
+  /**
+   * E-ink (electronic paper) mode: reduces animations, keeps the reader
+   * controls from auto-hiding and surfaces page/settings affordances that are
+   * easier to hit on slow-refresh screens. Defaults to on because this build
+   * targets e-ink devices first.
+   */
+  einkMode: boolean;
   _hasHydrated: boolean;
   _apiKeysLoaded: boolean;
 
   completeOnboarding: () => void;
   setShowOnboardingGuide: (show: boolean) => void;
+  setEinkMode: (enabled: boolean) => void;
   updateReadSettings: (updates: Partial<ReadSettings>) => void;
   updateTranslationConfig: (updates: Partial<TranslationConfig>) => void;
   updateAIConfig: (
@@ -447,6 +455,7 @@ export const useSettingsStore = create<SettingsState>()(
       settingsUpdatedAt: 0,
       hasCompletedOnboarding: false,
       showOnboardingGuide: true,
+      einkMode: true,
       _hasHydrated: false,
       _apiKeysLoaded: false,
 
@@ -454,6 +463,7 @@ export const useSettingsStore = create<SettingsState>()(
 
       completeOnboarding: () => set({ hasCompletedOnboarding: true }),
       setShowOnboardingGuide: (show: boolean) => set({ showOnboardingGuide: show }),
+      setEinkMode: (enabled) => set({ einkMode: enabled, settingsUpdatedAt: Date.now() }),
 
       updateReadSettings: (updates) =>
         set((state) => ({
@@ -639,6 +649,7 @@ export const useSettingsStore = create<SettingsState>()(
           readSettings: defaultReadSettings,
           translationConfig: defaultTranslationConfig,
           aiConfig: defaultAIConfig,
+          einkMode: true,
           _apiKeysLoaded: false,
         });
       },

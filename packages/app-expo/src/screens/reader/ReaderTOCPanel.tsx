@@ -8,6 +8,7 @@ import {
   XIcon,
 } from "@/components/ui/Icon";
 import { useResponsiveLayout } from "@/hooks/use-responsive-layout";
+import { useModalAnimationType } from "@/hooks/use-eink-mode";
 import { useColors } from "@/styles/theme";
 import { fontSize } from "@/styles/theme";
 import type { TOCItem } from "@readany/core/types";
@@ -58,12 +59,13 @@ export function ReaderTOCPanel({
   const insets = useSafeAreaInsets();
   const layout = useResponsiveLayout();
   const { t, i18n } = useTranslation();
+  const modalAnimationType = useModalAnimationType("slide");
 
   return (
     <Modal
       visible={visible}
       transparent
-      animationType="slide"
+      animationType={modalAnimationType}
       onRequestClose={onClose}
     >
       <Pressable style={s.modalBackdrop} onPress={onClose} />

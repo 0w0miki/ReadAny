@@ -28,6 +28,18 @@
       color: var(--fg, #e8e8ed);
     }
 
+    /* E-ink mode: collapse CSS transitions/animations inside the reading
+       surface. Page-turn motion is disabled separately via smoothReading. */
+    html.readany-reduce-motion *,
+    html.readany-reduce-motion *::before,
+    html.readany-reduce-motion *::after {
+      transition-duration: 0s !important;
+      transition-delay: 0s !important;
+      animation-duration: 0s !important;
+      animation-delay: 0s !important;
+      scroll-behavior: auto !important;
+    }
+
     #reader-container {
       width: 100%;
       height: 100%;
@@ -1836,6 +1848,12 @@
     function applySettings(settings) {
       if (!view || !view.renderer) return;
       const renderer = view.renderer;
+      if (settings.reduceMotion !== undefined) {
+        document.documentElement.classList.toggle(
+          'readany-reduce-motion',
+          settings.reduceMotion === true,
+        );
+      }
       if (settings.justifyBodyText !== undefined) {
         currentJustifyBodyText = settings.justifyBodyText !== false;
       }

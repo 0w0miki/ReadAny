@@ -58,6 +58,8 @@ export interface ReaderInitialSettings {
   paginatedLayout?: "single" | "double";
   /** Smooth reading: foliate `animated` page-turn + `scroll-inertia` physics */
   smoothReading?: boolean;
+  /** Disable reader-internal CSS transitions/animations (e-ink mode) */
+  reduceMotion?: boolean;
 }
 
 function withJustifiedTextSetting(settings: ReaderInitialSettings = {}): ReaderInitialSettings {
@@ -290,6 +292,7 @@ export function useReaderBridge(callbacks: ReaderBridgeCallbacks) {
       customFontFaceCSS?: string;
       customFontFamily?: string;
       smoothReading?: boolean;
+      reduceMotion?: boolean;
     }) => {
       const msg = JSON.stringify({
         type: "applySettings",

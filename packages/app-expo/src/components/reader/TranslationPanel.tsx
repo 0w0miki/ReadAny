@@ -1,4 +1,5 @@
 import { CheckIcon, ChevronDownIcon, XIcon } from "@/components/ui/Icon";
+import { useModalAnimationType } from "@/hooks/use-eink-mode";
 import { useSettingsStore } from "@/stores";
 import { type ThemeColors, fontSize, fontWeight, radius, useColors } from "@/styles/theme";
 import {
@@ -37,6 +38,7 @@ export function TranslationPanel({ text, onClose }: TranslationPanelProps) {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const s = makeStyles(colors);
+  const modalAnimationType = useModalAnimationType("slide");
 
   const translationConfig = useSettingsStore((s) => s.translationConfig);
   const aiConfig = useSettingsStore((s) => s.aiConfig);
@@ -154,7 +156,7 @@ export function TranslationPanel({ text, onClose }: TranslationPanelProps) {
         );
 
   return (
-    <Modal visible transparent animationType="slide" onRequestClose={onClose}>
+    <Modal visible transparent animationType={modalAnimationType} onRequestClose={onClose}>
       <Pressable style={s.backdrop} onPress={onClose} />
       <View style={[s.container, { paddingBottom: insets.bottom || 16 }]}>
         <View style={s.handle} />

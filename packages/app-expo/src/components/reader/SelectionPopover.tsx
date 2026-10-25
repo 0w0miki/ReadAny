@@ -10,6 +10,7 @@ import {
 } from "@/components/ui/Icon";
 import { RichTextEditor } from "@/components/ui/RichTextEditor";
 import type { SelectionEvent } from "@/hooks/use-reader-bridge";
+import { useModalAnimationType } from "@/hooks/use-eink-mode";
 import { radius, spacing, useColors, withOpacity } from "@/styles/theme";
 import type { ThemeColors } from "@/styles/theme";
 import { HIGHLIGHT_COLORS, HIGHLIGHT_COLOR_HEX } from "@readany/core/types";
@@ -76,6 +77,7 @@ export function SelectionPopover({
 }: Props) {
   const { t } = useTranslation();
   const colors = useColors();
+  const modalAnimationType = useModalAnimationType("slide");
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
   const s = useMemo(() => makeStyles(colors), [colors]);
   const [showNoteModal, setShowNoteModal] = useState(false);
@@ -277,7 +279,7 @@ export function SelectionPopover({
       <Modal
         visible={showNoteModal}
         transparent
-        animationType="slide"
+        animationType={modalAnimationType}
         onRequestClose={() => setShowNoteModal(false)}
       >
         <KeyboardAvoidingView

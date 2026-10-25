@@ -173,6 +173,11 @@ export const makeToolbarStyles = (colors: ThemeColors) =>
       position: "absolute", zIndex: 24,
     },
     bottomInfoSide: { flexDirection: "row", alignItems: "center", gap: 6 },
+    einkSettingsBtn: {
+      width: 36, height: 36, borderRadius: 18,
+      alignItems: "center", justifyContent: "center",
+      backgroundColor: withOpacity(colors.foreground, 0.06),
+    },
     bottomInfoText: {
       fontSize: fontSize.xs, color: colors.mutedForeground,
       fontVariant: ["tabular-nums"],

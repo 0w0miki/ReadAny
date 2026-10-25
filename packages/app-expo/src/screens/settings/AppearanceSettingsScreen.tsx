@@ -1,5 +1,6 @@
 import { BookOpenIcon, CheckIcon, ChevronDownIcon, MoonIcon, SunIcon } from "@/components/ui/Icon";
 import { useResponsiveLayout } from "@/hooks/use-responsive-layout";
+import { useSettingsStore } from "@/stores";
 import { useTheme } from "@/styles/ThemeContext";
 import type { ThemeMode } from "@/styles/ThemeContext";
 import { fontSize, fontWeight, radius, spacing } from "@/styles/theme";
@@ -11,6 +12,7 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
+  Switch,
   Text,
   TouchableOpacity,
   View,
@@ -39,6 +41,8 @@ export default function AppearanceSettingsScreen() {
   const { t, i18n } = useTranslation();
   const { mode, setMode, colors } = useTheme();
   const layout = useResponsiveLayout();
+  const einkMode = useSettingsStore((s) => s.einkMode);
+  const setEinkMode = useSettingsStore((s) => s.setEinkMode);
   const [lang, setLang] = useState(() => i18n.language || "en");
   const [showLangPicker, setShowLangPicker] = useState(false);
 
@@ -109,6 +113,32 @@ export default function AppearanceSettingsScreen() {
                   </TouchableOpacity>
                 );
               })}
+            </View>
+          </View>
+
+          {/* E-ink mode */}
+          <View style={s.section}>
+            <Text style={[s.sectionTitle, { color: colors.mutedForeground }]}>
+              {t("settings.einkSection", "电子墨水屏")}
+            </Text>
+            <View style={[s.einkRow, { backgroundColor: colors.card, borderColor: colors.border }]}>
+              <View style={s.einkInfo}>
+                <Text style={[s.einkTitle, { color: colors.foreground }]}>
+                  {t("settings.einkMode", "电子墨水屏模式")}
+                </Text>
+                <Text style={[s.einkDesc, { color: colors.mutedForeground }]}>
+                  {t(
+                    "settings.einkModeDesc",
+                    "减少动画、阅读工具栏常驻，并在书架显示上一页 / 下一页按钮",
+                  )}
+                </Text>
+              </View>
+              <Switch
+                value={einkMode}
+                onValueChange={setEinkMode}
+                trackColor={{ false: colors.border, true: colors.primary }}
+                thumbColor={colors.background}
+              />
             </View>
           </View>
 
@@ -213,6 +243,18 @@ function makeStyles(colors: ReturnType<typeof useTheme>["colors"]) {
     themeLabel: { fontSize: fontSize.sm },
     checkBadge: { position: "absolute", top: 8, right: 8 },
     checkMark: { fontSize: 14 },
+    einkRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 12,
+      paddingHorizontal: spacing.lg,
+      paddingVertical: 14,
+      borderRadius: radius.xl,
+      borderWidth: 1,
+    },
+    einkInfo: { flex: 1, gap: 4 },
+    einkTitle: { fontSize: fontSize.md },
+    einkDesc: { fontSize: fontSize.xs, lineHeight: 18 },
     langRow: {
       flexDirection: "row",
       alignItems: "center",

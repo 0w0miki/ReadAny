@@ -4,6 +4,7 @@
 import { MarkdownRenderer } from "@/components/chat/MarkdownRenderer";
 import { CheckIcon, EditIcon, XIcon } from "@/components/ui/Icon";
 import { useResponsiveLayout } from "@/hooks/use-responsive-layout";
+import { useModalAnimationType } from "@/hooks/use-eink-mode";
 import { RichTextEditor } from "@/components/ui/RichTextEditor";
 import { useAnnotationStore } from "@/stores";
 import { useColors } from "@/styles/theme";
@@ -49,12 +50,13 @@ export function ReaderNoteViewModal({
   const insets = useSafeAreaInsets();
   const layout = useResponsiveLayout();
   const { t } = useTranslation();
+  const modalAnimationType = useModalAnimationType("slide");
 
   return (
     <Modal
       visible={!!highlight}
       transparent
-      animationType="slide"
+      animationType={modalAnimationType}
       onRequestClose={onClose}
     >
       <KeyboardAvoidingView

@@ -59,6 +59,7 @@ import { subscribeRagSearchConfiguration } from "@/lib/rag/configure-search";
 import { MobileSyncAdapter } from "@/lib/sync/sync-adapter-mobile";
 import { RootNavigator } from "@/navigation/RootNavigator";
 import { useLibraryStore } from "@/stores/library-store";
+import { useSettingsStore } from "@/stores/settings-store";
 import { ThemeProvider, useTheme } from "@/styles/ThemeContext";
 import { useAutoSync } from "@readany/core/hooks/use-auto-sync";
 
@@ -85,7 +86,9 @@ SplashScreen.preventAutoHideAsync().catch(() => {});
 
 export default function App() {
   const [ready, setReady] = useState(false);
-  const [splashDone, setSplashDone] = useState(false);
+  // E-ink mode skips the animated splash entirely: its looping reanimated
+  // effects are wasted refresh cycles on electronic paper.
+  const [splashDone, setSplashDone] = useState(() => useSettingsStore.getState().einkMode);
   const [bootError, setBootError] = useState<string | null>(null);
 
   useEffect(() => {
