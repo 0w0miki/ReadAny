@@ -67,6 +67,7 @@ import {
   FlatList,
   Image,
   Keyboard,
+  type LayoutChangeEvent,
   Modal,
   Platform,
   Pressable,
@@ -172,40 +173,25 @@ export function LibraryScreen() {
   const searchInputRef = useRef<TextInput>(null);
   const einkMode = useEinkMode();
 
-  // Paged shelf: on e-ink, swiping a long grid is unreliable, so offer explicit
-  // previous/next page buttons that jump by one viewport.
+  // Paged shelf: on e-ink, swiping a long grid is unreliable. Pages jump by a
+  // whole number of rows so every page starts on a row boundary instead of
+  // cutting cards in half.
   const gridListRef = useRef<FlatList<LibraryGridItem>>(null);
   const [gridViewportHeight, setGridViewportHeight] = useState(0);
   const [gridContentHeight, setGridContentHeight] = useState(0);
   const [gridPage, setGridPage] = useState(1);
-  const gridPageCount =
-    gridViewportHeight > 0 && gridContentHeight > 0
-      ? Math.max(1, Math.ceil((gridContentHeight - 2) / gridViewportHeight))
-      : 1;
-  // Keep the indicator in range when the list shrinks (filter / delete).
-  const currentGridPage = Math.min(gridPage, gridPageCount);
-  const goToGridPage = useCallback(
-    (page: number) => {
-      const target = Math.max(1, Math.min(gridPageCount, page));
-      gridListRef.current?.scrollToOffset({
-        offset: (target - 1) * gridViewportHeight,
-        animated: !einkMode,
-      });
-      setGridPage(target);
+  const [rowPitch, setRowPitch] = useState(0);
+  // Measure the tallest rendered row so page boundaries land on row edges.
+  const handleGridItemLayout = useCallback(
+    (event: LayoutChangeEvent) => {
+      const pitch = event.nativeEvent.layout.height + gridGap;
+      setRowPitch((prev) => (pitch > prev + 1 ? pitch : prev));
     },
-    [einkMode, gridPageCount, gridViewportHeight],
+    [gridGap],
   );
-  // Only re-render when the page number actually changes; the raw scroll event
-  // fires every 32ms and this screen is heavy on slow devices.
-  const handleGridScroll = useCallback(
-    (event: { nativeEvent: { contentOffset: { y: number } } }) => {
-      if (gridViewportHeight <= 0) return;
-      const raw = Math.floor(event.nativeEvent.contentOffset.y / gridViewportHeight) + 1;
-      const next = Math.min(gridPageCount, Math.max(1, raw));
-      setGridPage((prev) => (prev === next ? prev : next));
-    },
-    [gridPageCount, gridViewportHeight],
-  );
+  useEffect(() => {
+    setRowPitch(0);
+  }, [gridItemWidth]);
 
   const [tagSheetOpen, setTagSheetOpen] = useState(false);
   const [tagSheetBook, setTagSheetBook] = useState<Book | null>(null);
@@ -435,6 +421,41 @@ export function LibraryScreen() {
         ? [...groupedEntries, ...visibleBooks.map((book) => ({ type: "book" as const, book }))]
         : visibleBooks.map((book) => ({ type: "book" as const, book })),
     [activeGroupId, groupedEntries, isGroupView, visibleBooks, hasSearch],
+  );
+
+  // Row-aligned pagination: one page = N complete rows.
+  const gridRowCount = Math.ceil(gridItems.length / Math.max(1, columnCount));
+  // Fallback before the first row is measured: cover ratio + info block.
+  const estimatedRowPitch = Math.round(gridItemWidth * (41 / 28) + 72) + gridGap;
+  const effectiveRowPitch = rowPitch > 0 ? rowPitch : estimatedRowPitch;
+  const gridRowsPerPage = Math.max(
+    1,
+    Math.floor((gridViewportHeight - 8) / Math.max(1, effectiveRowPitch)),
+  );
+  const gridPageHeight = gridRowsPerPage * effectiveRowPitch;
+  const gridPageCount = Math.max(1, Math.ceil(gridRowCount / gridRowsPerPage));
+  // Keep the indicator in range when the list shrinks (filter / delete).
+  const currentGridPage = Math.min(gridPage, gridPageCount);
+  const goToGridPage = useCallback(
+    (page: number) => {
+      const target = Math.max(1, Math.min(gridPageCount, page));
+      const maxOffset = Math.max(0, gridContentHeight - gridViewportHeight);
+      const offset = Math.min((target - 1) * gridPageHeight, maxOffset);
+      gridListRef.current?.scrollToOffset({ offset, animated: !einkMode });
+      setGridPage(target);
+    },
+    [einkMode, gridContentHeight, gridPageCount, gridPageHeight, gridViewportHeight],
+  );
+  // Only re-render when the page number actually changes; raw scroll events fire
+  // every 32ms and this screen is heavy on slow devices.
+  const handleGridScroll = useCallback(
+    (event: { nativeEvent: { contentOffset: { y: number } } }) => {
+      if (gridPageHeight <= 0) return;
+      const raw = Math.floor(event.nativeEvent.contentOffset.y / gridPageHeight) + 1;
+      const next = Math.min(gridPageCount, Math.max(1, raw));
+      setGridPage((prev) => (prev === next ? prev : next));
+    },
+    [gridPageCount, gridPageHeight],
   );
 
   const handleLocalImport = useCallback(async () => {
@@ -783,7 +804,7 @@ export function LibraryScreen() {
 
   const renderGridItem = useCallback(
     ({ item }: { item: LibraryGridItem }) => (
-      <View style={s.gridItem}>
+      <View style={s.gridItem} onLayout={handleGridItemLayout}>
         {item.type === "group" ? (
           <GroupCard
             group={item.group}
@@ -816,6 +837,7 @@ export function LibraryScreen() {
     [
       enterSelectionMode,
       gridItemWidth,
+      handleGridItemLayout,
       handleGroupLongPress,
       handleManageTags,
       handleShowDetails,

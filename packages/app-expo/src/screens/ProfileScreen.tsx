@@ -3,31 +3,19 @@ import {
   BookOpenIcon,
   ChevronRightIcon,
   ClockIcon,
-  CloudIcon,
-  CpuIcon,
-  DatabaseIcon,
   FlameIcon,
-  HelpCircleIcon,
-  InfoIcon,
-  LanguagesIcon,
-  MessageSquareIcon,
-  PaletteIcon,
-  PuzzleIcon,
-  Trash2Icon,
+  SettingsIcon,
   TypeIcon,
-  Volume2Icon,
 } from "@/components/ui/Icon";
 import { SyncButton } from "@/components/ui/SyncButton";
 import { useResponsiveLayout } from "@/hooks/use-responsive-layout";
-import { clearMobileRuntimeCache, formatCacheSize } from "@/lib/platform/mobile-cache";
-import { stopTTSPreview } from "@/lib/platform/tts-preview";
 import {
   mergeCurrentSessionIntoDailyStats,
   mergeCurrentSessionIntoOverallStats,
 } from "@/lib/stats/live-reading-stats";
 import type { RootStackParamList } from "@/navigation/RootNavigator";
 import { formatCharacterCount, formatTimeLocalized } from "@/screens/stats/stats-utils";
-import { useReadingSessionStore, useTTSStore } from "@/stores";
+import { useReadingSessionStore } from "@/stores";
 import {
   type ThemeColors,
   fontSize,
@@ -38,7 +26,6 @@ import {
 } from "@/styles/theme";
 import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
-import { refreshAndCountUnreadFeedback } from "@readany/core/feedback";
 import { readingStatsService } from "@readany/core/stats";
 import type { DailyStats, OverallStats } from "@readany/core/stats";
 import { eventBus } from "@readany/core/utils/event-bus";
@@ -52,7 +39,6 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   ActivityIndicator,
-  Alert,
   Linking,
   ScrollView,
   type StyleProp,
@@ -70,19 +56,7 @@ type ProfileMenuIcon = (props: {
   color?: string;
   strokeWidth?: number;
 }) => React.ReactNode;
-type ProfileMenuRoute = Extract<
-  keyof RootStackParamList,
-  | "AppearanceSettings"
-  | "FontSettings"
-  | "SyncSettings"
-  | "AISettings"
-  | "TTSSettings"
-  | "TranslationSettings"
-  | "Skills"
-  | "VectorModelSettings"
-  | "Feedback"
-  | "About"
->;
+type ProfileMenuRoute = Extract<keyof RootStackParamList, "Settings">;
 type ProfileMenuItem =
   | {
       icon: ProfileMenuIcon;
@@ -324,11 +298,8 @@ export function ProfileScreen() {
   const [overall, setOverall] = useState<OverallStats | null>(null);
   const [dailyStats, setDailyStats] = useState<DailyStats[]>([]);
   const [statsLoading, setStatsLoading] = useState(true);
-  const [unreadFeedback, setUnreadFeedback] = useState(0);
-  const [clearingCache, setClearingCache] = useState(false);
   const saveCurrentSession = useReadingSessionStore((s) => s.saveCurrentSession);
   const currentSession = useReadingSessionStore((s) => s.currentSession);
-  const stopTTS = useTTSStore((s) => s.stop);
 
   const loadStats = useCallback(async () => {
     try {
@@ -355,9 +326,6 @@ export function ProfileScreen() {
   useFocusEffect(
     useCallback(() => {
       void loadStats();
-      refreshAndCountUnreadFeedback()
-        .then(setUnreadFeedback)
-        .catch((err) => console.warn("[ProfileScreen] feedback unread refresh:", err));
     }, [loadStats]),
   );
 
@@ -376,121 +344,22 @@ export function ProfileScreen() {
     [overall, dailyStats, currentSession],
   );
   const isZh = i18n.language.startsWith("zh");
-  const handleClearCache = useCallback(() => {
-    Alert.alert(
-      t("profile.clearCacheTitle", "清除缓存"),
-      t(
-        "profile.clearCacheConfirm",
-        "将清除临时导入文件、TTS 音频缓存和其他运行缓存。书籍、笔记、设置和同步数据不会被删除。",
-      ),
-      [
-        { text: t("common.cancel", "取消"), style: "cancel" },
-        {
-          text: t("profile.clearCacheAction", "清除缓存"),
-          style: "destructive",
-          onPress: async () => {
-            setClearingCache(true);
-            try {
-              stopTTS();
-              stopTTSPreview();
-              const result = await clearMobileRuntimeCache();
-              Alert.alert(
-                t("profile.clearCacheDoneTitle", "缓存已清除"),
-                t("profile.clearCacheDoneDesc", {
-                  count: result.deletedFiles,
-                  size: formatCacheSize(result.deletedBytes),
-                }),
-              );
-            } catch (error) {
-              console.error("[ProfileScreen] Failed to clear cache:", error);
-              Alert.alert(
-                t("profile.clearCacheFailedTitle", "清除失败"),
-                error instanceof Error
-                  ? error.message
-                  : t("profile.clearCacheFailedDesc", "请稍后重试。"),
-              );
-            } finally {
-              setClearingCache(false);
-            }
-          },
-        },
-      ],
-    );
-  }, [stopTTS, t]);
-
-  // Settings menu — matching Tauri ProfilePage exactly
+  // One entry point: the tabbed settings hub. Keeps this profile page short,
+  // which matters on e-ink screens.
   const menuSections = useMemo<{ title: string; items: ProfileMenuItem[] }[]>(
     () => [
       {
-        title: t("settings.general", "通用"),
+        title: t("settings.title", "设置"),
         items: [
           {
-            icon: PaletteIcon,
-            label: t("settings.general", "通用"),
-            route: "AppearanceSettings" as const,
+            icon: SettingsIcon,
+            label: t("settings.title", "设置"),
+            route: "Settings" as const,
           },
-          {
-            icon: TypeIcon,
-            label: t("fonts.title", "字体"),
-            route: "FontSettings" as const,
-          },
-          { icon: CloudIcon, label: t("settings.sync", "同步"), route: "SyncSettings" as const },
-        ],
-      },
-      {
-        title: t("profile.storage", "存储"),
-        items: [
-          {
-            icon: Trash2Icon,
-            label: clearingCache
-              ? t("profile.clearingCache", "清除中...")
-              : t("profile.clearCache", "清除缓存"),
-            action: handleClearCache,
-            disabled: clearingCache,
-          },
-        ],
-      },
-      {
-        title: t("settings.skills", "能力"),
-        items: [
-          {
-            icon: DatabaseIcon,
-            label: t("settings.ai_title", "AI 模型"),
-            route: "AISettings" as const,
-          },
-          { icon: Volume2Icon, label: t("tts.title", "语音朗读"), route: "TTSSettings" as const },
-          {
-            icon: LanguagesIcon,
-            label: t("settings.translationTab", "翻译"),
-            route: "TranslationSettings" as const,
-          },
-          { icon: PuzzleIcon, label: t("skills.title", "技能"), route: "Skills" as const },
-          {
-            icon: CpuIcon,
-            label: t("settings.vm_title", "向量模型"),
-            route: "VectorModelSettings" as const,
-          },
-        ],
-      },
-      {
-        title: t("settings.other", "更多"),
-        items: [
-          {
-            icon: MessageSquareIcon,
-            label: t("feedback.title", "反馈建议"),
-            route: "Feedback" as const,
-            showDot: unreadFeedback > 0,
-          },
-          {
-            icon: HelpCircleIcon,
-            label: t("about.supportCenter", "帮助中心"),
-            url: `https://codedogqby.github.io/ReadAny/${i18n.language === "zh" ? "zh/" : ""}support/`,
-          },
-          { icon: InfoIcon, label: t("settings.about", "关于"), route: "About" as const },
         ],
       },
     ],
-    [t, i18n.language, unreadFeedback, clearingCache, handleClearCache],
+    [t],
   );
 
   const booksRead = liveOverall?.totalBooks ?? 0;

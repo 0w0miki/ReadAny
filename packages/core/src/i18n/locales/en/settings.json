@@ -600,6 +600,23 @@
           "fail": "ReadAny Skill is not installed at {{path}}."
         }
       }
-    }
+    },
+    "tabs": {
+      "general": "General",
+      "reading": "Reading",
+      "network": "Network",
+      "storage": "Storage",
+      "system": "System"
+    },
+    "einkModeShort": "Less motion, page buttons, always-on reader settings",
+    "appearanceHint": "Theme / language / display",
+    "fontsHint": "Fonts, size and typography",
+    "ttsHint": "Engine, voice and speed",
+    "translationHint": "Translation service and target language",
+    "syncHint": "WebDAV / S3 / LAN",
+    "aiHint": "Model endpoints and keys",
+    "vectorHint": "Local index and embedding model",
+    "skillsHint": "Built-in and custom AI skills",
+    "hubHint": "Settings are grouped by tab to keep scrolling short on e-ink."
   }
 }

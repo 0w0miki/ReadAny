@@ -17,6 +17,7 @@
     "version": "ReadAny Mobile v{{version}}",
     "storage": "Storage",
     "clearCache": "Clear Cache",
+    "clearCacheShort": "Temporary files / TTS cache",
     "clearingCache": "Clearing...",
     "clearCacheTitle": "Clear Cache",
     "clearCacheConfirm": "This will remove temporary import files, TTS audio cache, and other runtime cache. Books, notes, settings, and sync data will not be deleted.",

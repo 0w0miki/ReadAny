@@ -17,6 +17,7 @@
     "version": "ReadAny Mobile v{{version}}",
     "storage": "存储",
     "clearCache": "清除缓存",
+    "clearCacheShort": "临时文件 / TTS 缓存",
     "clearingCache": "清除中...",
     "clearCacheTitle": "清除缓存",
     "clearCacheConfirm": "将清除临时导入文件、TTS 音频缓存和其他运行缓存。书籍、笔记、设置和同步数据不会被删除。",

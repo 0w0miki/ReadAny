@@ -14,6 +14,7 @@ import AppearanceSettingsScreen from "@/screens/settings/AppearanceSettingsScree
 import FeedbackDetailScreen from "@/screens/settings/FeedbackDetailScreen";
 import FeedbackScreen from "@/screens/settings/FeedbackScreen";
 import FontSettingsScreen from "@/screens/settings/FontSettingsScreen";
+import { SettingsHubScreen } from "@/screens/settings/SettingsHubScreen";
 import SyncSettingsScreen from "@/screens/settings/SyncSettingsScreen";
 import TTSSettingsScreen from "@/screens/settings/TTSSettingsScreen";
 import TranslationSettingsScreen from "@/screens/settings/TranslationSettingsScreen";
@@ -35,6 +36,7 @@ export type RootStackParamList = {
   Stats: undefined;
   Badges: undefined;
   Skills: undefined;
+  Settings: undefined;
   VectorModelSettings: undefined;
   AppearanceSettings: undefined;
   AISettings: undefined;
@@ -96,6 +98,7 @@ export function RootNavigator() {
               name="Skills"
               component={SkillsScreen}
             />
+            <Stack.Screen name="Settings" component={SettingsHubScreen} />
             <Stack.Screen
               name="VectorModelSettings"
               component={VectorModelSettingsScreen}
