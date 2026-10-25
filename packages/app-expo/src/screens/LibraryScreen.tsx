@@ -173,7 +173,9 @@ export function LibraryScreen() {
   const columnCount = useMemo(() => {
     if (shelfColumns !== "auto") return shelfColumns;
     if (!einkMode) return baseColumnCount;
-    const minCardWidth = layout.isTablet ? 96 : 72;
+    // Keep every candidate usable, but allow 5 columns on a phone when that
+    // is the only way to get a second whole row (Plan 2 prioritises blank).
+    const minCardWidth = layout.isTablet ? 90 : 56;
     const candidates = [baseColumnCount, baseColumnCount + 1, baseColumnCount + 2].filter(
       (count) => {
         const width = Math.floor((contentWidth - gridGap * (count - 1)) / count);
