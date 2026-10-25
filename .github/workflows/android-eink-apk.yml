@@ -1,0 +1,164 @@
+name: Android E-ink APK
+
+# Push to the e-ink branch builds automatically. Once this workflow exists on the
+# default branch you can also run it manually (workflow_dispatch) from the
+# Actions tab and pick the branch/variant.
+on:
+  push:
+    branches:
+      - feat/android-eink
+    paths-ignore:
+      - "docs/**"
+      - "**/*.md"
+      - "website/**"
+      - ".github/workflows/website.yml"
+      - ".github/workflows/deploy-worker.yml"
+      - ".github/workflows/update-homebrew.yml"
+      - ".github/workflows/release.yml"
+  workflow_dispatch:
+    inputs:
+      variant:
+        description: "APP_VARIANT（preview 与官方版共存，production 与官方同包名）"
+        type: choice
+        default: preview
+        options:
+          - preview
+          - production
+      architectures:
+        description: "目标 ABI（逗号分隔可在一次构建里包含多个）"
+        type: choice
+        default: arm64-v8a
+        options:
+          - arm64-v8a
+          - arm64-v8a,armeabi-v7a
+          - armeabi-v7a
+          - x86_64
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-eink-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-apk:
+    name: Build release APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      APP_VARIANT: ${{ inputs.variant || 'preview' }}
+      ARCHS: ${{ inputs.architectures || 'arm64-v8a' }}
+      EXPO_NO_TELEMETRY: "1"
+      EXPO_NO_METRO_WORKSPACE_ROOT: "1"
+      NODE_OPTIONS: "--max-old-space-size=4096"
+      CI: "true"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # GitHub-hosted runners have a small SSD; React Native + NDK needs room.
+      - name: Free disk space
+        uses: jlumbroso/free-disk-space@main
+        with:
+          tool-cache: false
+          android: false
+          dotnet: true
+          haskell: true
+          large-packages: true
+          docker-images: true
+          swap-storage: true
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20.18.0
+          cache: pnpm
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK packages
+        run: |
+          yes | sdkmanager --licenses > /dev/null || true
+          sdkmanager \
+            "platform-tools" \
+            "platforms;android-36" \
+            "build-tools;36.0.0" \
+            "ndk;27.1.12297006" \
+            "cmake;3.22.1" \
+            "cmake;3.30.5"
+
+      - name: Install JS dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build reader bundle
+        run: pnpm --filter @readany/app-expo build:reader
+
+      - name: Generate Android project
+        working-directory: packages/app-expo
+        run: npx expo prebuild -p android --no-install
+
+      - name: Restore Gradle cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml', 'packages/app-expo/android/**/*.gradle*', 'packages/app-expo/android/gradle/wrapper/gradle-wrapper.properties') }}
+          restore-keys: |
+            gradle-${{ runner.os }}-
+
+      - name: Build release APK
+        working-directory: packages/app-expo/android
+        run: |
+          ./gradlew :app:assembleRelease \
+            -PreactNativeArchitectures="${ARCHS}" \
+            -x lint -x lintVitalRelease \
+            --no-daemon
+
+      - name: Collect APK
+        run: |
+          set -euo pipefail
+          SRC_DIR=packages/app-expo/android/app/build/outputs/apk/release
+          OUT="ReadAny-${APP_VARIANT}-${ARCHS//,/_}.apk"
+          mkdir -p dist
+          cp "${SRC_DIR}/app-release.apk" "dist/${OUT}"
+          ls -lh "dist/${OUT}"
+          echo "APK_PATH=dist/${OUT}" >> "$GITHUB_ENV"
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: readany-eink-${{ inputs.variant || 'preview' }}
+          path: dist/*.apk
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Job summary
+        run: |
+          {
+            echo "### ✅ ReadAny e-ink APK"
+            echo ""
+            echo "| 项目 | 值 |"
+            echo "| --- | --- |"
+            echo "| 文件 | \`$(basename "${APK_PATH}")\` |"
+            echo "| App variant | \`${APP_VARIANT}\` |"
+            echo "| ABI | \`${ARCHS}\` |"
+            echo "| 包名 | \`$([ "${APP_VARIANT}" = "production" ] && echo com.readany.app || echo com.readany.app.preview)\` |"
+            echo "| 签名 | debug keystore（可侧载，不可上架） |"
+            echo ""
+            echo "下载 Actions 页面底部 Artifacts 里的 zip，解压后 \`adb install -r <apk>\`。"
+          } >> "$GITHUB_STEP_SUMMARY"
