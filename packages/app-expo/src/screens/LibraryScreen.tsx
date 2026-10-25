@@ -433,18 +433,24 @@ export function LibraryScreen() {
     Math.floor((gridViewportHeight - 8) / Math.max(1, effectiveRowPitch)),
   );
   const gridPageHeight = gridRowsPerPage * effectiveRowPitch;
-  const gridPageCount = Math.max(1, Math.ceil(gridRowCount / gridRowsPerPage));
+  const maxGridOffset = Math.max(0, gridContentHeight - gridViewportHeight);
+  // A short last page would otherwise create "ghost" pages that never scroll.
+  const reachablePageCount =
+    gridPageHeight > 0 ? Math.floor(maxGridOffset / gridPageHeight) + 1 : 1;
+  const gridPageCount = Math.max(
+    1,
+    Math.min(Math.ceil(gridRowCount / gridRowsPerPage), reachablePageCount),
+  );
   // Keep the indicator in range when the list shrinks (filter / delete).
   const currentGridPage = Math.min(gridPage, gridPageCount);
   const goToGridPage = useCallback(
     (page: number) => {
       const target = Math.max(1, Math.min(gridPageCount, page));
-      const maxOffset = Math.max(0, gridContentHeight - gridViewportHeight);
-      const offset = Math.min((target - 1) * gridPageHeight, maxOffset);
+      const offset = Math.min((target - 1) * gridPageHeight, maxGridOffset);
       gridListRef.current?.scrollToOffset({ offset, animated: !einkMode });
       setGridPage(target);
     },
-    [einkMode, gridContentHeight, gridPageCount, gridPageHeight, gridViewportHeight],
+    [einkMode, gridPageCount, gridPageHeight, maxGridOffset],
   );
   // Only re-render when the page number actually changes; raw scroll events fire
   // every 32ms and this screen is heavy on slow devices.
