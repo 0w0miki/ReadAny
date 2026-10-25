@@ -353,7 +353,7 @@ export function ProfileScreen() {
         items: [
           {
             icon: SettingsIcon,
-            label: t("settings.title", "设置"),
+            label: t("settings.allSettings", "全部设置"),
             route: "Settings" as const,
           },
         ],

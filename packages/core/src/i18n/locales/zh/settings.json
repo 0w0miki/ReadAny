@@ -617,6 +617,7 @@
     "aiHint": "模型端点与密钥",
     "vectorHint": "本地索引与嵌入模型",
     "skillsHint": "内置与自定义 AI 技能",
-    "hubHint": "设置按类别分页，减少电纸书上的滚动。"
+    "hubHint": "设置按类别分页，减少电纸书上的滚动。",
+    "allSettings": "全部设置"
   }
 }
