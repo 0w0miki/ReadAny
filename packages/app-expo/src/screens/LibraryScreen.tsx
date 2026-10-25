@@ -492,10 +492,22 @@ export function LibraryScreen() {
       : 0);
   // Keep the indicator in range when the list shrinks (filter / delete).
   const currentGridPage = Math.min(gridPage, gridPageCount);
+  // Native scroll offsets are rounded to whole pixels and `gridPageHeight` is
+  // fractional (cover height follows the card aspect ratio), so an exact page
+  // boundary can land 1px short. Round instead of floor and allow 2px of slack;
+  // otherwise "page 3 → prev" would show page 2 while the label says 1.
+  const gridPageFromOffset = useCallback(
+    (offset: number) => {
+      if (gridPageHeight <= 0) return 1;
+      const raw = Math.round((offset + 2) / gridPageHeight) + 1;
+      return Math.min(gridPageCount, Math.max(1, raw));
+    },
+    [gridPageCount, gridPageHeight],
+  );
   const goToGridPage = useCallback(
     (page: number) => {
       const target = Math.max(1, Math.min(gridPageCount, page));
-      const offset = Math.min((target - 1) * gridPageHeight, maxGridOffset);
+      const offset = Math.min(Math.round((target - 1) * gridPageHeight), maxGridOffset);
       gridListRef.current?.scrollToOffset({ offset, animated: !einkMode });
       setGridPage(target);
     },
@@ -505,12 +517,10 @@ export function LibraryScreen() {
   // every 32ms and this screen is heavy on slow devices.
   const handleGridScroll = useCallback(
     (event: { nativeEvent: { contentOffset: { y: number } } }) => {
-      if (gridPageHeight <= 0) return;
-      const raw = Math.floor(event.nativeEvent.contentOffset.y / gridPageHeight) + 1;
-      const next = Math.min(gridPageCount, Math.max(1, raw));
+      const next = gridPageFromOffset(event.nativeEvent.contentOffset.y);
       setGridPage((prev) => (prev === next ? prev : next));
     },
-    [gridPageCount, gridPageHeight],
+    [gridPageFromOffset],
   );
 
   const handleLocalImport = useCallback(async () => {
