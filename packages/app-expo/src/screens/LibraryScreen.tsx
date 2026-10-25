@@ -1,7 +1,7 @@
 import { BookCard } from "@/components/library/BookCard";
 import {
+  BOOK_CARD_INFO_HEIGHT,
   getBookCardMetrics,
-  getShelfInfoHeight,
 } from "@/components/library/book-card-styles";
 import { GroupCard } from "@/components/library/GroupCard";
 import { GroupPickerSheet } from "@/components/library/GroupPickerSheet";
@@ -184,19 +184,31 @@ export function LibraryScreen() {
     const available = shelfAreaHeight - PAGE_NAV_RESERVE - 8;
     if (available <= 0) return baseColumnCount;
 
+    // Score each candidate after absorbing the page remainder into row gaps
+    // (same cap as the real pagination below). Prefer the smallest leftover,
+    // then the fullest page, then the widest cards.
     let best = baseColumnCount;
-    let bestScore = Number.NEGATIVE_INFINITY;
+    let bestRemaining = Number.POSITIVE_INFINITY;
+    let bestFill = -1;
+    let bestWidth = -1;
     for (const count of candidates) {
       const width = Math.floor((contentWidth - gridGap * (count - 1)) / count);
-      const rowHeight = width * (41 / 28) + getShelfInfoHeight(width);
-      const rowPitch = rowHeight + gridGap;
-      const rowsPerPage = Math.max(1, Math.floor(available / rowPitch));
-      // 0..1: how much of the page height is filled by whole rows.
-      const fill = Math.min(1, (rowsPerPage * rowPitch) / available);
-      const score = fill * 1000 + width;
-      if (score > bestScore) {
-        bestScore = score;
+      const rowHeight = width * (41 / 28) + BOOK_CARD_INFO_HEIGHT;
+      const basePitch = rowHeight + gridGap;
+      const rows = Math.max(1, Math.floor(available / basePitch));
+      const leftover = Math.max(0, available - rows * basePitch);
+      const extra = Math.min(24, leftover / rows);
+      const remaining = leftover - rows * extra;
+      const fill = Math.min(1, (rows * (basePitch + extra)) / available);
+      const better =
+        remaining < bestRemaining - 0.5 ||
+        (Math.abs(remaining - bestRemaining) <= 0.5 &&
+          (fill > bestFill + 0.001 || (Math.abs(fill - bestFill) <= 0.001 && width > bestWidth)));
+      if (better) {
         best = count;
+        bestRemaining = remaining;
+        bestFill = fill;
+        bestWidth = width;
       }
     }
     return best;
@@ -469,20 +481,22 @@ export function LibraryScreen() {
     [activeGroupId, groupedEntries, isGroupView, visibleBooks, hasSearch],
   );
 
-  // Row-aligned pagination: one page = N complete rows. Every shelf cell has
-  // the same height (cover + fixed info block), so page offsets are exact row
-  // multiples and no page can reveal a sliver of the next row.
+  // Row-aligned pagination: one page = N complete rows. Any leftover height is
+  // absorbed into the row gaps (max 24dp per row) so the page fills the screen
+  // without revealing a sliver of the next row.
   const gridRowCount = Math.ceil(gridItems.length / Math.max(1, columnCount));
   const { coverHeight } = getBookCardMetrics(gridItemWidth);
-  const gridRowHeight = coverHeight + getShelfInfoHeight(gridItemWidth);
+  const gridRowHeight = coverHeight + BOOK_CARD_INFO_HEIGHT;
   // Reserve room for the page nav bar below the list.
   const pageNavReserve = einkMode ? PAGE_NAV_RESERVE : 0;
   const shelfAvailable = Math.max(gridRowHeight, shelfAreaHeight - pageNavReserve - 8);
-  const gridRowsPerPage = Math.max(
-    1,
-    Math.floor(shelfAvailable / (gridRowHeight + gridGap)),
-  );
-  const gridRowPitch = gridRowHeight + gridGap;
+  const gridBaseRowPitch = gridRowHeight + gridGap;
+  const gridRowsPerPage = Math.max(1, Math.floor(shelfAvailable / gridBaseRowPitch));
+  const gridLeftover = Math.max(0, shelfAvailable - gridRowsPerPage * gridBaseRowPitch);
+  // Plan 1: spread the remainder into row gaps, capped at 24dp per row.
+  const gridExtraGap = Math.min(24, gridLeftover / gridRowsPerPage);
+  const gridRowPitch = gridBaseRowPitch + gridExtraGap;
+  const gridRowGap = gridGap + gridExtraGap;
   const gridPageHeight = gridRowsPerPage * gridRowPitch;
   const gridPageCount = Math.max(1, Math.ceil(gridRowCount / gridRowsPerPage));
   const paginateShelf = einkMode && gridPageCount > 1;
@@ -497,9 +511,7 @@ export function LibraryScreen() {
   // Keep the indicator in range when the list shrinks (filter / delete).
   const currentGridPage = Math.min(gridPage, gridPageCount);
   // Native scroll offsets are rounded to whole pixels and `gridPageHeight` is
-  // fractional (cover height follows the card aspect ratio), so an exact page
-  // boundary can land 1px short. Round instead of floor and allow 2px of slack;
-  // otherwise "page 3 → prev" would show page 2 while the label says 1.
+  // fractional, so round with 2px of slack instead of flooring.
   const gridPageFromOffset = useCallback(
     (offset: number) => {
       if (gridPageHeight <= 0) return 1;
@@ -873,7 +885,7 @@ export function LibraryScreen() {
 
   const renderGridItem = useCallback(
     ({ item }: { item: LibraryGridItem }) => (
-      <View style={s.gridItem}>
+      <View style={[s.gridItem, paginateShelf && { marginBottom: gridRowGap }]}>
         {item.type === "group" ? (
           <GroupCard
             group={item.group}
@@ -906,11 +918,13 @@ export function LibraryScreen() {
     [
       enterSelectionMode,
       gridItemWidth,
+      gridRowGap,
       handleGroupLongPress,
       handleManageTags,
       handleShowDetails,
       handleOpen,
       handleVectorize,
+      paginateShelf,
       removeBook,
       s.gridItem,
       selectedBookIds,
@@ -1584,7 +1598,7 @@ const makeStyles = (
       justifyContent: "space-between",
       paddingHorizontal: 4,
       paddingVertical: 6,
-      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopWidth: 1,
       borderTopColor: colors.border,
     },
     pageNavActions: { flexDirection: "row", alignItems: "center", gap: 10 },

@@ -7,14 +7,6 @@ import { StyleSheet } from "react-native";
  */
 export const BOOK_CARD_INFO_HEIGHT = 68;
 
-/**
- * Info block height for the uniform e-ink shelf rows. Narrow cards (4–5 columns
- * on a phone) need a compact block so two rows can still fit on screen.
- */
-export function getShelfInfoHeight(cardWidth: number): number {
-  return cardWidth < 84 ? 48 : BOOK_CARD_INFO_HEIGHT;
-}
-
 export function getBookCardMetrics(cardWidth: number) {
   const coverWidth = cardWidth;
   const coverHeight = coverWidth * (41 / 28);
@@ -27,7 +19,6 @@ export const makeStyles = (
   uniformRowHeight = false,
 ) => {
   const { coverWidth, coverHeight } = getBookCardMetrics(cardWidth);
-  const infoHeight = getShelfInfoHeight(cardWidth);
 
   return StyleSheet.create({
     container: { width: coverWidth },
@@ -137,7 +128,7 @@ export const makeStyles = (
       ? {
           paddingTop: 6,
           paddingHorizontal: 1,
-          height: infoHeight,
+          height: BOOK_CARD_INFO_HEIGHT,
           overflow: "hidden",
         }
       : { paddingTop: 6, paddingHorizontal: 1 },
