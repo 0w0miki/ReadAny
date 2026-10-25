@@ -105,6 +105,8 @@ type Nav = NativeStackNavigationProp<RootStackParamList>;
 
 const NUM_COLUMNS = 3;
 const GRID_GAP = 12;
+/** Height reserved below the grid for the previous/next page bar. */
+const PAGE_NAV_RESERVE = 56;
 
 function splitUrlPathSegments(pathname: string): string[] {
   return pathname.split("/").filter(Boolean);
@@ -155,9 +157,54 @@ export function LibraryScreen() {
   const { t } = useTranslation();
   const nav = useNavigation<Nav>();
   const layout = useResponsiveLayout();
+  const einkMode = useEinkMode();
+  // Available height of the shelf area (grid + page bar); measured below.
+  const [shelfAreaHeight, setShelfAreaHeight] = useState(0);
   const gridGap = layout.isTablet ? 16 : GRID_GAP;
-  const columnCount = layout.isTabletLandscape ? 5 : layout.isTablet ? 4 : NUM_COLUMNS;
   const contentWidth = layout.centeredContentWidth;
+  const baseColumnCount = layout.isTabletLandscape ? 5 : layout.isTablet ? 4 : NUM_COLUMNS;
+  /**
+   * On e-ink, pick the column count whose whole-row pages fill the screen best
+   * (instead of hard-coding 3 on phones). Wider cards win ties so covers stay
+   * readable.
+   */
+  const columnCount = useMemo(() => {
+    if (!einkMode) return baseColumnCount;
+    const minCardWidth = layout.isTablet ? 96 : 72;
+    const candidates = [baseColumnCount, baseColumnCount + 1, baseColumnCount + 2].filter(
+      (count) => {
+        const width = Math.floor((contentWidth - gridGap * (count - 1)) / count);
+        return width >= minCardWidth;
+      },
+    );
+    if (candidates.length <= 1) return candidates[0] ?? baseColumnCount;
+    const available = shelfAreaHeight - PAGE_NAV_RESERVE - 8;
+    if (available <= 0) return baseColumnCount;
+
+    let best = baseColumnCount;
+    let bestScore = Number.NEGATIVE_INFINITY;
+    for (const count of candidates) {
+      const width = Math.floor((contentWidth - gridGap * (count - 1)) / count);
+      const rowHeight = width * (41 / 28) + BOOK_CARD_INFO_HEIGHT;
+      const rowPitch = rowHeight + gridGap;
+      const rowsPerPage = Math.max(1, Math.floor(available / rowPitch));
+      // 0..1: how much of the page height is filled by whole rows.
+      const fill = Math.min(1, (rowsPerPage * rowPitch) / available);
+      const score = fill * 1000 + width;
+      if (score > bestScore) {
+        bestScore = score;
+        best = count;
+      }
+    }
+    return best;
+  }, [
+    baseColumnCount,
+    contentWidth,
+    einkMode,
+    gridGap,
+    layout.isTablet,
+    shelfAreaHeight,
+  ]);
   const gridItemWidth = Math.floor((contentWidth - gridGap * (columnCount - 1)) / columnCount);
   const s = useMemo(
     () =>
@@ -174,17 +221,19 @@ export function LibraryScreen() {
   const [showSort, setShowSort] = useState(false);
   const searchAnim = useRef(new Animated.Value(0)).current;
   const searchInputRef = useRef<TextInput>(null);
-  const einkMode = useEinkMode();
 
   // Paged shelf: on e-ink, swiping a long grid is unreliable. Pages jump by a
   // whole number of rows so every page starts on a row boundary instead of
   // cutting cards in half.
   const gridListRef = useRef<FlatList<LibraryGridItem>>(null);
-  // Available height of the shelf area (list + page bar).
-  const [shelfAreaHeight, setShelfAreaHeight] = useState(0);
   const [listViewportHeight, setListViewportHeight] = useState(0);
   const [gridContentHeight, setGridContentHeight] = useState(0);
   const [gridPage, setGridPage] = useState(1);
+  // Column count can change with the e-ink adaptive layout; restart at page 1.
+  useEffect(() => {
+    setGridPage(1);
+    gridListRef.current?.scrollToOffset({ offset: 0, animated: false });
+  }, [columnCount]);
 
   const [tagSheetOpen, setTagSheetOpen] = useState(false);
   const [tagSheetBook, setTagSheetBook] = useState<Book | null>(null);
@@ -423,7 +472,7 @@ export function LibraryScreen() {
   const { coverHeight } = getBookCardMetrics(gridItemWidth);
   const gridRowHeight = coverHeight + BOOK_CARD_INFO_HEIGHT;
   // Reserve room for the page nav bar below the list.
-  const pageNavReserve = einkMode ? 56 : 0;
+  const pageNavReserve = einkMode ? PAGE_NAV_RESERVE : 0;
   const shelfAvailable = Math.max(gridRowHeight, shelfAreaHeight - pageNavReserve - 8);
   const gridRowsPerPage = Math.max(
     1,
