@@ -245,11 +245,6 @@ export function LibraryScreen() {
   const [listViewportHeight, setListViewportHeight] = useState(0);
   const [gridContentHeight, setGridContentHeight] = useState(0);
   const [gridPage, setGridPage] = useState(1);
-  // Column count can change with the e-ink adaptive layout; restart at page 1.
-  useEffect(() => {
-    setGridPage(1);
-    gridListRef.current?.scrollToOffset({ offset: 0, animated: false });
-  }, [columnCount]);
 
   const [tagSheetOpen, setTagSheetOpen] = useState(false);
   const [tagSheetBook, setTagSheetBook] = useState<Book | null>(null);
@@ -308,6 +303,22 @@ export function LibraryScreen() {
     removeTag,
     renameTag,
   } = useLibraryStore();
+
+  // Restart at page 1 whenever the shelf content changes (group drill-down,
+  // tag filter, search, sort, column count). Otherwise the old scroll offset
+  // can outlive the new, shorter content and the grid renders blank.
+  useEffect(() => {
+    setGridPage(1);
+    gridListRef.current?.scrollToOffset({ offset: 0, animated: false });
+  }, [
+    activeGroupId,
+    activeTag,
+    columnCount,
+    filter.search,
+    filter.sortField,
+    filter.sortOrder,
+    isGroupView,
+  ]);
 
   const { downloadingBookId, downloadProgress, downloadBook } = useBookDownload({
     loadBooks,
@@ -1241,7 +1252,7 @@ export function LibraryScreen() {
                 keyExtractor={(item) =>
                   item.type === "group" ? `group-${item.group.id}` : item.book.id
                 }
-                key={`library-grid-${columnCount}`}
+                key={`library-grid-${columnCount}-${isGroupView ? 1 : 0}-${activeGroupId}-${activeTag}`}
                 style={[
                   s.gridList,
                   paginateShelf && {
