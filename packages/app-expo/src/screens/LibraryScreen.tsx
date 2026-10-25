@@ -106,8 +106,6 @@ type Nav = NativeStackNavigationProp<RootStackParamList>;
 
 const NUM_COLUMNS = 3;
 const GRID_GAP = 12;
-/** Height reserved below the grid for the previous/next page bar. */
-const PAGE_NAV_RESERVE = 56;
 
 function splitUrlPathSegments(pathname: string): string[] {
   return pathname.split("/").filter(Boolean);
@@ -183,7 +181,7 @@ export function LibraryScreen() {
       },
     );
     if (candidates.length <= 1) return candidates[0] ?? baseColumnCount;
-    const available = shelfAreaHeight - PAGE_NAV_RESERVE - 8;
+    const available = shelfAreaHeight - 8;
     if (available <= 0) return baseColumnCount;
 
     // Score each candidate after absorbing the page remainder into row gaps
@@ -489,9 +487,8 @@ export function LibraryScreen() {
   const gridRowCount = Math.ceil(gridItems.length / Math.max(1, columnCount));
   const { coverHeight } = getBookCardMetrics(gridItemWidth);
   const gridRowHeight = coverHeight + BOOK_CARD_INFO_HEIGHT;
-  // Reserve room for the page nav bar below the list.
-  const pageNavReserve = einkMode ? PAGE_NAV_RESERVE : 0;
-  const shelfAvailable = Math.max(gridRowHeight, shelfAreaHeight - pageNavReserve - 8);
+  // Page controls float over the list, so the grid uses the full height.
+  const shelfAvailable = Math.max(gridRowHeight, shelfAreaHeight - 8);
   const gridBaseRowPitch = gridRowHeight + gridGap;
   const gridRowsPerPage = Math.max(1, Math.floor(shelfAvailable / gridBaseRowPitch));
   const gridLeftover = Math.max(0, shelfAvailable - gridRowsPerPage * gridBaseRowPitch);
@@ -1272,33 +1269,30 @@ export function LibraryScreen() {
                 scrollEventThrottle={32}
               />
               {einkMode && gridPageCount > 1 && (
-                <View style={s.pageNavBar}>
+                <View style={s.pageNavFloat}>
+                  <TouchableOpacity
+                    style={[s.pageNavBtn, currentGridPage <= 1 && s.pageNavBtnDisabled]}
+                    onPress={() => goToGridPage(currentGridPage - 1)}
+                    disabled={currentGridPage <= 1}
+                    accessibilityRole="button"
+                    accessibilityLabel={t("library.pageUp", "上一页")}
+                  >
+                    <ChevronUpIcon size={20} color={colors.foreground} />
+                  </TouchableOpacity>
+                  <View style={s.pageNavDivider} />
                   <Text style={s.pageNavLabel}>
-                    {currentGridPage} / {gridPageCount}
+                    {currentGridPage}/{gridPageCount}
                   </Text>
-                  <View style={s.pageNavActions}>
-                    <TouchableOpacity
-                      style={[s.pageNavBtn, currentGridPage <= 1 && s.pageNavBtnDisabled]}
-                      onPress={() => goToGridPage(currentGridPage - 1)}
-                      disabled={currentGridPage <= 1}
-                      accessibilityRole="button"
-                      accessibilityLabel={t("library.pageUp", "上一页")}
-                    >
-                      <ChevronUpIcon size={20} color={colors.foreground} />
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={[
-                        s.pageNavBtn,
-                        currentGridPage >= gridPageCount && s.pageNavBtnDisabled,
-                      ]}
-                      onPress={() => goToGridPage(currentGridPage + 1)}
-                      disabled={currentGridPage >= gridPageCount}
-                      accessibilityRole="button"
-                      accessibilityLabel={t("library.pageDown", "下一页")}
-                    >
-                      <ChevronDownIcon size={20} color={colors.foreground} />
-                    </TouchableOpacity>
-                  </View>
+                  <View style={s.pageNavDivider} />
+                  <TouchableOpacity
+                    style={[s.pageNavBtn, currentGridPage >= gridPageCount && s.pageNavBtnDisabled]}
+                    onPress={() => goToGridPage(currentGridPage + 1)}
+                    disabled={currentGridPage >= gridPageCount}
+                    accessibilityRole="button"
+                    accessibilityLabel={t("library.pageDown", "下一页")}
+                  >
+                    <ChevronDownIcon size={20} color={colors.foreground} />
+                  </TouchableOpacity>
                 </View>
               )}
             </View>
@@ -1593,31 +1587,36 @@ const makeStyles = (
     gridItem: { width: layout.gridItemWidth, marginBottom: layout.gridGap },
     gridListWrap: { flex: 1, width: "100%" },
     gridList: { flex: 1 },
-    pageNavBar: {
-      marginTop: "auto",
-      flexDirection: "row",
+    pageNavFloat: {
+      position: "absolute",
+      right: 4,
+      bottom: 6,
+      zIndex: 30,
+      elevation: 6,
       alignItems: "center",
-      justifyContent: "space-between",
-      paddingHorizontal: 4,
-      paddingVertical: 6,
-      borderTopWidth: 1,
-      borderTopColor: colors.border,
+      overflow: "hidden",
+      borderRadius: radius.lg,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.background,
     },
-    pageNavActions: { flexDirection: "row", alignItems: "center", gap: 10 },
+    pageNavDivider: {
+      width: 24,
+      height: 1,
+      backgroundColor: colors.border,
+    },
     pageNavLabel: {
-      fontSize: fontSize.sm,
+      fontSize: 12,
+      lineHeight: 16,
+      paddingVertical: 2,
       color: colors.mutedForeground,
       fontVariant: ["tabular-nums"],
     },
     pageNavBtn: {
       width: 40,
       height: 40,
-      borderRadius: 20,
       alignItems: "center",
       justifyContent: "center",
-      backgroundColor: colors.card,
-      borderWidth: 1,
-      borderColor: colors.border,
     },
     pageNavBtnDisabled: { opacity: 0.3 },
     groupModalKeyboardRoot: { flex: 1 },
