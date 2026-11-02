@@ -169,6 +169,11 @@ const getBoundingClientRect = target => {
 
 const isNonEmptyRect = rect => rect?.width > 0 && rect?.height > 0
 
+// TEMP diagnostics for the ReadAny reader (adb logcat via the host bridge).
+const readAnyGestureLog = (...parts) => {
+    try { globalThis.__readanyGestureLog?.(parts.join(' ')) } catch {}
+}
+
 const getMappedRectStart = (rect, mapRect) => {
     const mapped = mapRect(rect)
     const start = Math.min(mapped.left, mapped.right)
@@ -1175,6 +1180,14 @@ export class Paginator extends HTMLElement {
             }
         }, 250)
         this.#container.addEventListener('scroll', () => {
+            if (!this.readanyScrollLogAt || performance.now() - this.readanyScrollLogAt > 120) {
+                this.readanyScrollLogAt = performance.now()
+                readAnyGestureLog('container:scroll',
+                    'pos=' + this.containerPosition,
+                    'page=' + this.page,
+                    'animating=' + this.#isAnimating,
+                    'locked=' + this.#navigationLocked)
+            }
             if (!this.#isAnimating) this.dispatchEvent(new Event('scroll'))
             // Keep the per-view backgrounds glued to the content while a swipe
             // drag scrolls the container (no animation runs then). During the
@@ -1605,6 +1618,9 @@ export class Paginator extends HTMLElement {
                 }
             })
             doc.addEventListener('focusin', e => {
+                readAnyGestureLog('selection:focusin target=' +
+                    String(e.target && (e.target.tagName || e.target.nodeName)) +
+                    ' pos=' + this.containerPosition)
                 if (this.scrolled) return null
                 if (this.#container && this.#container.contains(e.target)) {
                     // NOTE: `requestAnimationFrame` is needed in WebKit
@@ -2116,6 +2132,13 @@ export class Paginator extends HTMLElement {
     // dx, dy: total distance swiped
     // dt: total time of the swipe (ms)
     snap(vx, vy, dx, dy, dt) {
+        readAnyGestureLog('paginator:snap',
+            'vx=' + Number(vx).toFixed(3),
+            'vy=' + Number(vy).toFixed(3),
+            'dx=' + Number(dx).toFixed(1),
+            'dy=' + Number(dy).toFixed(1),
+            'pos=' + this.containerPosition,
+            'page=' + this.page)
         const velocity = this.#vertical ? vy : vx
         const avgVelocity = this.#vertical ? dy / dt : dx / dt
         const horizontal = Math.abs(vx) * 2 > Math.abs(vy)
@@ -2150,6 +2173,13 @@ export class Paginator extends HTMLElement {
     }
     #onTouchStart(e) {
         this.#cancelScrollInertia()
+        readAnyGestureLog('paginator:touchstart',
+            'pos=' + this.containerPosition,
+            'page=' + this.page,
+            'locked=' + this.#navigationLocked,
+            'animated=' + this.hasAttribute('animated'),
+            'eink=' + this.hasAttribute('eink'),
+            'noSwipe=' + this.hasAttribute('no-swipe'))
         if (this.#navigationLocked) return
         const contents = this.getContents?.() ?? []
         for (const { doc } of contents) {
@@ -2223,6 +2253,21 @@ export class Paginator extends HTMLElement {
     }
     #onTouchMove(e) {
         const state = this.#touchState
+        if (state) {
+            const t0 = e.changedTouches && e.changedTouches[0]
+            if (t0 && (!state.readanyLogAt || e.timeStamp - state.readanyLogAt > 120)) {
+                state.readanyLogAt = e.timeStamp
+                readAnyGestureLog('paginator:touchmove',
+                    'x=' + Math.round(t0.screenX),
+                    'y=' + Math.round(t0.screenY),
+                    'locked=' + this.#navigationLocked,
+                    'pos=' + this.containerPosition,
+                    'scrollLocked=' + this.#scrollLocked,
+                    'animated=' + this.hasAttribute('animated'),
+                    'eink=' + this.hasAttribute('eink'),
+                    'winScrollX=' + (typeof window !== 'undefined' ? window.scrollX : 'n/a'))
+            }
+        }
         if (this.#navigationLocked || !state) return
         const contents = this.getContents?.() ?? []
         for (const { doc } of contents) {
@@ -2275,13 +2320,28 @@ export class Paginator extends HTMLElement {
         state.dt += dt
         this.#touchScrolled = true
         if (!this.hasAttribute('animated') || this.hasAttribute('eink')) return
+        const beforePan = this.containerPosition
         if (!this.#vertical && Math.abs(state.dx) >= Math.abs(state.dy) && !this.hasAttribute('eink') && (!isStylus || Math.abs(dx) > 1)) {
             this.scrollBy(dx, 0)
         } else if (this.#vertical && Math.abs(state.dx) < Math.abs(state.dy) && !this.hasAttribute('eink') && (!isStylus || Math.abs(dy) > 1)) {
             this.scrollBy(0, dy)
         }
+        if (this.containerPosition !== beforePan) {
+            readAnyGestureLog('paginator:pan',
+                'dx=' + dx.toFixed(1),
+                'dy=' + dy.toFixed(1),
+                'from=' + beforePan,
+                'to=' + this.containerPosition,
+                'animated=' + this.hasAttribute('animated'))
+        }
     }
     #onTouchEnd() {
+        readAnyGestureLog('paginator:touchend',
+            'pos=' + this.containerPosition,
+            'page=' + this.page,
+            'touchScrolled=' + this.#touchScrolled,
+            'locked=' + this.#navigationLocked,
+            'noSwipe=' + this.hasAttribute('no-swipe'))
         // Remove will-change hint to free GPU resources
         // if (this.#view?.element) {
         //     this.#view.element.style.willChange = 'auto'
@@ -2412,6 +2472,14 @@ export class Paginator extends HTMLElement {
         return this.#scrollToPage(page, reason)
     }
     async #scrollTo(offset, reason, smooth) {
+        let stack = ''
+        try { stack = String(new Error().stack || '').split('\n').slice(2, 5).join(' <- ') } catch {}
+        readAnyGestureLog('paginator:scrollTo',
+            'reason=' + String(reason),
+            'from=' + this.containerPosition,
+            'to=' + Number(offset).toFixed(1),
+            'smooth=' + String(smooth),
+            'stack=' + stack)
         this.#cancelScrollInertia()
         const { size } = this
         if (this.containerPosition === offset) {

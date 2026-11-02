@@ -185,6 +185,10 @@
     function postToRN(type, data) {
       if (RN) RN.postMessage(JSON.stringify({ type, ...data }));
     }
+    // TEMP diagnostics: route paginator touch/scroll state to adb logcat.
+    globalThis.__readanyGestureLog = function (message) {
+      postToRN('debug', { message: '[Gesture] ' + message });
+    };
     window.__READANY_READER_BUILD_ID = 'android-local-server-cors';
     postToRN('debug', { message: '[ReaderBuild] ' + window.__READANY_READER_BUILD_ID });
     Promise.withResolvers ??= function () {
@@ -1754,6 +1758,17 @@
         container.appendChild(el);
         view = el;
         window.__readanyView = el;
+        el.addEventListener('relocate', (event) => {
+          const detail = event && event.detail ? event.detail : {};
+          const r = el.renderer;
+          globalThis.__readanyGestureLog?.(
+            'relocate reason=' + String(detail.reason) +
+            ' index=' + String(detail.index) +
+            ' fraction=' + (typeof detail.fraction === 'number' ? detail.fraction.toFixed(6) : 'n/a') +
+            ' pos=' + (r ? r.containerPosition : 'n/a') +
+            ' page=' + (r ? r.page : 'n/a')
+          );
+        });
         // Console helper: run `__readanyGestureState()` in Chrome DevTools to
         // snapshot the attributes that decide whether paginator follows a touch.
         window.__readanyGestureState = function () {
@@ -1896,6 +1911,16 @@
         // `eink` disables foliate's finger-following pan; page turns still snap.
         if (settings.reduceMotion) renderer.setAttribute('eink', '');
         else renderer.removeAttribute('eink');
+      }
+      if (settings.reduceMotion !== undefined || settings.smoothReading !== undefined) {
+        globalThis.__readanyGestureLog?.(
+          'applySettings reduceMotion=' + String(settings.reduceMotion) +
+          ' smoothReading=' + String(settings.smoothReading) +
+          ' animated=' + String(renderer.hasAttribute('animated')) +
+          ' eink=' + String(renderer.hasAttribute('eink')) +
+          ' flow=' + String(renderer.getAttribute('flow')) +
+          ' viewMode=' + currentViewMode
+        );
       }
       if (settings.reduceMotion !== undefined) {
         document.documentElement.classList.toggle(
@@ -2695,6 +2720,12 @@ html, body {
           return;
         }
         const touch = e.touches[0];
+        globalThis.__readanyGestureLog?.(
+          'tapstart x=' + Math.round(touch.clientX) +
+          ' y=' + Math.round(touch.clientY) +
+          ' selInteraction=' + String(!!doc.__readany_selection_interaction) +
+          ' pos=' + (view && view.renderer ? view.renderer.containerPosition : 'n/a')
+        );
         const hitNote = isPointInNoteRange(doc, touch.clientX, touch.clientY);
         const hitAnnotation = hitNote || isPointInAnnotationRange(doc, touch.clientX, touch.clientY);
         clearLongPressTimer();
@@ -2703,6 +2734,8 @@ html, body {
           if (!tapState || tapState.moved) return;
           longPressNavigationLocked = true;
           syncReaderNavigationLock();
+          globalThis.__readanyGestureLog?.('longPressLock pos=' +
+            (view && view.renderer ? view.renderer.containerPosition : 'n/a'));
           // Suppress the tap-to-turn path for this gesture.
           tapState.moved = true;
         }, LONG_PRESS_LOCK_MS);
@@ -2764,7 +2797,14 @@ html, body {
         tapState = null;
         clearLongPressTimer();
         releaseLongPressLockSoon();
-        if (!state || state.moved || e.changedTouches.length !== 1) return;
+        if (!state || state.moved || e.changedTouches.length !== 1) {
+          globalThis.__readanyGestureLog?.(
+            'tapend ignored state=' + (state ? 'yes' : 'no') +
+            ' moved=' + String(state && state.moved) +
+            ' touches=' + e.changedTouches.length
+          );
+          return;
+        }
         if (Date.now() - state.startedAt > MAX_TAP_MS) return;
         const touch = e.changedTouches[0];
         const hitAnnotation = state.annotationRangeHit || isPointInAnnotationRange(doc, touch.clientX, touch.clientY);
@@ -2971,6 +3011,11 @@ html, body {
       })();
 
       function markSelectionInteraction(active) {
+        if (!!active !== !!doc.__readany_selection_interaction) {
+          globalThis.__readanyGestureLog?.('selectionInteraction=' + String(!!active) +
+            ' textLen=' + (doc.getSelection?.()?.toString?.().trim?.().length || 0) +
+            ' pos=' + (view && view.renderer ? view.renderer.containerPosition : 'n/a'));
+        }
         doc.__readany_selection_interaction = !!active;
         const wasActive = selectionActiveDocs.has(doc);
         if (active) {
