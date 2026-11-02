@@ -406,25 +406,18 @@ ${rules.map((rule) => `  ${rule}`).join("\n")}
     // Navigation lock sources: the pull-to-bookmark gesture and text selection.
     // Both can own the touch gesture, so they share one combined lock.
     let pullBookmarkNavigationLocked = false;
+    let longPressNavigationLocked = false;
+    let longPressTimer = null;
     const selectionActiveDocs = new Set();
     let selectionNavigationLocked = false;
     function syncReaderNavigationLock() {
       try {
         if (typeof window.setNavigationLocked === 'function') {
-          window.setNavigationLocked(pullBookmarkNavigationLocked || selectionNavigationLocked);
+          window.setNavigationLocked(
+            pullBookmarkNavigationLocked || selectionNavigationLocked || longPressNavigationLocked,
+          );
         }
       } catch (err) { /* renderer not ready yet */ }
-    }
-    // Text selection starts after the browser's long-press delay; by then the
-    // paginator may already have recorded the same touch as a swipe. Cancel
-    // that pending gesture so touchend does not snap to the previous/next page.
-    function cancelPaginatorTouchState(doc) {
-      try {
-        if (doc) doc.dispatchEvent(new Event('touchcancel'));
-      } catch (err) { /* no-op */ }
-      try {
-        if (view && view.renderer) view.renderer.dispatchEvent(new Event('touchcancel'));
-      } catch (err) { /* no-op */ }
     }
     let refreshAnnotationsTimer = null;
     let activeFootnoteTipKey = null;
@@ -2047,6 +2040,11 @@ ${rules.map((rule) => `  ${rule}`).join("\n")}
       if (!view || !view.renderer) return;
       const renderer = view.renderer;
       if (settings.reduceMotion !== undefined) {
+        // `eink` disables foliate's finger-following pan; page turns still snap.
+        if (settings.reduceMotion) renderer.setAttribute('eink', '');
+        else renderer.removeAttribute('eink');
+      }
+      if (settings.reduceMotion !== undefined) {
         document.documentElement.classList.toggle(
           'readany-reduce-motion',
           settings.reduceMotion === true,
@@ -2810,7 +2808,25 @@ html, body {
 
       const MAX_TAP_MS = 250;
       const MOVE_THRESHOLD = 12;
+      // Android's text-selection long-press fires after ~500ms. Lock the
+      // paginator slightly earlier so a selection drag is never tracked as a
+      // swipe (which would pan the page toward the previous/next one).
+      const LONG_PRESS_LOCK_MS = 320;
       let tapState = null;
+      const clearLongPressTimer = () => {
+        if (longPressTimer) {
+          clearTimeout(longPressTimer);
+          longPressTimer = null;
+        }
+      };
+      const releaseLongPressLockSoon = () => {
+        setTimeout(() => {
+          if (selectionActiveDocs.size === 0) {
+            longPressNavigationLocked = false;
+            syncReaderNavigationLock();
+          }
+        }, 180);
+      };
 
       doc.addEventListener('touchstart', (e) => {
         if (bookmarkPullGestureActive) {
@@ -2828,6 +2844,15 @@ html, body {
         const touch = e.touches[0];
         const hitNote = isPointInNoteRange(doc, touch.clientX, touch.clientY);
         const hitAnnotation = hitNote || isPointInAnnotationRange(doc, touch.clientX, touch.clientY);
+        clearLongPressTimer();
+        longPressTimer = setTimeout(() => {
+          longPressTimer = null;
+          if (!tapState || tapState.moved) return;
+          longPressNavigationLocked = true;
+          syncReaderNavigationLock();
+          // Suppress the tap-to-turn path for this gesture.
+          tapState.moved = true;
+        }, LONG_PRESS_LOCK_MS);
         tapState = {
           startedAt: Date.now(),
           startX: touch.clientX,
@@ -2856,11 +2881,15 @@ html, body {
           Math.abs(touch.clientY - tapState.startY) > MOVE_THRESHOLD
         ) {
           tapState.moved = true;
+          clearLongPressTimer();
         }
       }, { passive: true });
 
       doc.addEventListener('touchcancel', () => {
+        clearLongPressTimer();
         tapState = null;
+        longPressNavigationLocked = false;
+        syncReaderNavigationLock();
       }, { passive: true });
 
       doc.addEventListener('touchend', (e) => {
@@ -2880,6 +2909,8 @@ html, body {
 
         const state = tapState;
         tapState = null;
+        clearLongPressTimer();
+        releaseLongPressLockSoon();
         if (!state || state.moved || e.changedTouches.length !== 1) return;
         if (Date.now() - state.startedAt > MAX_TAP_MS) return;
         const touch = e.changedTouches[0];
@@ -3091,9 +3122,9 @@ html, body {
         const wasActive = selectionActiveDocs.has(doc);
         if (active) {
           selectionActiveDocs.add(doc);
-          if (!wasActive) cancelPaginatorTouchState(doc);
         } else {
           selectionActiveDocs.delete(doc);
+          if (selectionActiveDocs.size === 0) longPressNavigationLocked = false;
         }
         selectionNavigationLocked = selectionActiveDocs.size > 0;
         syncReaderNavigationLock();

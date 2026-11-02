@@ -1004,8 +1004,14 @@ export function ReaderScreen({ route, navigation }: Props) {
       // Recompute effective fontSize after every settings change — covers
       // both stepper changes and toggling followSystemFontScale on/off.
       const merged = { ...currentSettings, ...updates };
+      // E-ink mode always disables smooth reading; re-assert it here so a
+      // previously saved `smoothReading: true` cannot be re-pushed when the
+      // user changes another reading setting.
+      const einkModeNow = useSettingsStore.getState().einkMode;
       bridge.applySettings({
         ...merged,
+        smoothReading: einkModeNow ? false : merged.smoothReading === true,
+        reduceMotion: einkModeNow,
         fontSize: computeEffectiveFontSize(merged.fontSize, merged.followSystemFontScale),
         customFontFaceCSS: fontCSS,
         customFontFamily: fontFamily ?? "",
