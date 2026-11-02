@@ -2744,6 +2744,15 @@ export class Paginator extends HTMLElement {
         }
     }
     #afterScroll(reason) {
+        // While a selection gesture owns navigation, a native selection
+        // auto-scroll must not update the page anchor / fire relocate.
+        if (reason === 'container-scroll' && this.#navigationLocked && !this.scrolled) {
+            readAnyGestureLog('afterScroll:suppressed',
+                'pos=' + this.containerPosition,
+                'page=' + this.page,
+                'reason=' + String(reason))
+            return
+        }
         // In multi-view, detect which section is primary
         if (this.#views.size > 1 && reason !== 'anchor' && reason !== 'navigation') {
             this.#detectPrimaryView()
