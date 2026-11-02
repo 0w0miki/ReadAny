@@ -403,6 +403,29 @@ ${rules.map((rule) => `  ${rule}`).join("\n")}
     let bookTextMetricsTimer = null;
     let bookmarkPullGestureActive = false;
     let pullBookmarkResetTimer = null;
+    // Navigation lock sources: the pull-to-bookmark gesture and text selection.
+    // Both can own the touch gesture, so they share one combined lock.
+    let pullBookmarkNavigationLocked = false;
+    const selectionActiveDocs = new Set();
+    let selectionNavigationLocked = false;
+    function syncReaderNavigationLock() {
+      try {
+        if (typeof window.setNavigationLocked === 'function') {
+          window.setNavigationLocked(pullBookmarkNavigationLocked || selectionNavigationLocked);
+        }
+      } catch (err) { /* renderer not ready yet */ }
+    }
+    // Text selection starts after the browser's long-press delay; by then the
+    // paginator may already have recorded the same touch as a swipe. Cancel
+    // that pending gesture so touchend does not snap to the previous/next page.
+    function cancelPaginatorTouchState(doc) {
+      try {
+        if (doc) doc.dispatchEvent(new Event('touchcancel'));
+      } catch (err) { /* no-op */ }
+      try {
+        if (view && view.renderer) view.renderer.dispatchEvent(new Event('touchcancel'));
+      } catch (err) { /* no-op */ }
+    }
     let refreshAnnotationsTimer = null;
     let activeFootnoteTipKey = null;
     let bookmarkPullStateMeta = {
@@ -2995,11 +3018,8 @@ html, body {
           pullState.active = true;
           // Lock paginator's touch-driven page turns while we own the gesture,
           // so a slightly diagonal pull-down can't drift the page horizontally.
-          try {
-            if (typeof window.setNavigationLocked === 'function') {
-              window.setNavigationLocked(true);
-            }
-          } catch (err) { /* renderer not ready yet — no-op */ }
+          pullBookmarkNavigationLocked = true;
+          syncReaderNavigationLock();
         }
 
         if (deltaY <= 0) {
@@ -3017,11 +3037,8 @@ html, body {
       doc.addEventListener('touchend', (e) => {
         const state = pullState;
         pullState = null;
-        try {
-          if (typeof window.setNavigationLocked === 'function') {
-            window.setNavigationLocked(false);
-          }
-        } catch (err) { /* no-op */ }
+        pullBookmarkNavigationLocked = false;
+        syncReaderNavigationLock();
         if (!state) return;
 
         if (state.active) {
@@ -3046,11 +3063,8 @@ html, body {
 
       doc.addEventListener('touchcancel', () => {
         pullState = null;
-        try {
-          if (typeof window.setNavigationLocked === 'function') {
-            window.setNavigationLocked(false);
-          }
-        } catch (err) { /* no-op */ }
+        pullBookmarkNavigationLocked = false;
+        syncReaderNavigationLock();
         resetPullBookmarkUI(true);
       }, { passive: true, capture: true });
     }
@@ -3074,7 +3088,24 @@ html, body {
 
       function markSelectionInteraction(active) {
         doc.__readany_selection_interaction = !!active;
+        const wasActive = selectionActiveDocs.has(doc);
+        if (active) {
+          selectionActiveDocs.add(doc);
+          if (!wasActive) cancelPaginatorTouchState(doc);
+        } else {
+          selectionActiveDocs.delete(doc);
+        }
+        selectionNavigationLocked = selectionActiveDocs.size > 0;
+        syncReaderNavigationLock();
       }
+
+      try {
+        doc.defaultView?.addEventListener('pagehide', () => {
+          selectionActiveDocs.delete(doc);
+          selectionNavigationLocked = selectionActiveDocs.size > 0;
+          syncReaderNavigationLock();
+        });
+      } catch (err) { /* no-op */ }
 
       function scheduleClearSelectionInteraction() {
         if (selectionClearTimer) clearTimeout(selectionClearTimer);
