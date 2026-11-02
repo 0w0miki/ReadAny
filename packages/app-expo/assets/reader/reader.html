@@ -1928,6 +1928,34 @@ ${rules.map((rule) => `  ${rule}`).join("\n")}
 
         container.appendChild(el);
         view = el;
+        window.__readanyView = el;
+        // Console helper: run `__readanyGestureState()` in Chrome DevTools to
+        // snapshot the attributes that decide whether paginator follows a touch.
+        window.__readanyGestureState = function () {
+          const r = view && view.renderer;
+          let selectionText = '';
+          try {
+            const contents = r && r.getContents ? r.getContents() : [];
+            selectionText = contents
+              .map(({ doc }) => (doc && doc.getSelection ? doc.getSelection() : null))
+              .filter((sel) => sel && !sel.isCollapsed && sel.toString().trim())
+              .map((sel) => sel.toString())
+              .join(' | ');
+          } catch (err) { /* no-op */ }
+          return {
+            animated: r && r.hasAttribute ? r.hasAttribute('animated') : null,
+            eink: r && r.hasAttribute ? r.hasAttribute('eink') : null,
+            noSwipe: r && r.hasAttribute ? r.hasAttribute('no-swipe') : null,
+            navigationLocked: r ? !!r.navigationLocked : null,
+            containerPosition: r ? r.containerPosition : null,
+            selectionText,
+            viewMode: typeof currentViewMode !== 'undefined' ? currentViewMode : null,
+            longPressLocked: typeof longPressNavigationLocked !== 'undefined'
+              ? longPressNavigationLocked : null,
+            selectionDocs: typeof selectionActiveDocs !== 'undefined'
+              ? selectionActiveDocs.size : null,
+          };
+        };
         currentSectionUsesVerticalWriting = false;
 
         await el.open(book);

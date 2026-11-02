@@ -1534,6 +1534,9 @@ export function ReaderScreen({ route, navigation }: Props) {
             showsVerticalScrollIndicator={false}
             originWhitelist={["*"]}
             mixedContentMode="always"
+            // TEMP: lets you attach Chrome DevTools to the reader WebView.
+            // Remove before shipping a production build.
+            webviewDebuggingEnabled={Platform.OS === "android"}
           />
         </View>
 
