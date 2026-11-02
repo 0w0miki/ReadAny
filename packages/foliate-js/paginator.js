@@ -1180,6 +1180,23 @@ export class Paginator extends HTMLElement {
             }
         }, 250)
         this.#container.addEventListener('scroll', () => {
+            if (!this.scrolled && this.#navigationLocked && !this.#isAnimating) {
+                const pos = this.containerPosition
+                const expected = this.readanyExpectedScroll
+                if (expected != null) {
+                    if (Math.abs(pos - expected) < 2) {
+                        this.readanyLockAnchor = pos
+                        this.readanyExpectedScroll = null
+                    }
+                } else if (this.readanyLockAnchor != null
+                    && Math.abs(pos - this.readanyLockAnchor) > 0.5) {
+                    readAnyGestureLog('container:scroll-restore',
+                        'from=' + pos,
+                        'to=' + this.readanyLockAnchor)
+                    this.containerPosition = this.readanyLockAnchor
+                    return
+                }
+            }
             if (!this.readanyScrollLogAt || performance.now() - this.readanyScrollLogAt > 120) {
                 this.readanyScrollLogAt = performance.now()
                 readAnyGestureLog('container:scroll',
@@ -2038,7 +2055,19 @@ export class Paginator extends HTMLElement {
         return this.#navigationLocked
     }
     set navigationLocked(value) {
-        this.#navigationLocked = !!value
+        const locked = !!value
+        if (locked && !this.#navigationLocked) {
+            // Remember where the page was when the gesture became ours, so a
+            // native selection auto-scroll can be reverted instead of silently
+            // sliding the paginated strip toward the previous page.
+            this.readanyLockAnchor = this.containerPosition
+            this.readanyExpectedScroll = null
+        }
+        if (!locked) {
+            this.readanyLockAnchor = null
+            this.readanyExpectedScroll = null
+        }
+        this.#navigationLocked = locked
         if (this.#navigationLocked) this.#cancelScrollInertia()
     }
     get noPreload() {
@@ -2487,6 +2516,7 @@ export class Paginator extends HTMLElement {
             this.#afterScroll(reason)
             return
         }
+        if (this.#navigationLocked) this.readanyExpectedScroll = offset
         // FIXME: vertical-rl only, not -lr
         if (this.scrolled && this.#vertical) offset = -offset
         if ((reason === 'snap' || smooth) && this.hasAttribute('animated') && !this.hasAttribute('eink')) {
@@ -2502,6 +2532,10 @@ export class Paginator extends HTMLElement {
                     if (!this.scrolled) this.#replaceBackground()
                 }).then(() => {
                     this.#isAnimating = false
+                    if (this.#navigationLocked) {
+                        this.readanyLockAnchor = offset
+                        this.readanyExpectedScroll = null
+                    }
                     this.#scrollBounds = [offset, this.atStart ? 0 : size, this.atEnd ? 0 : size]
                     this.#afterScroll(reason)
                 })
@@ -2535,11 +2569,19 @@ export class Paginator extends HTMLElement {
                 300,
             ).then(() => {
                 this.#isAnimating = false
+                if (this.#navigationLocked) {
+                    this.readanyLockAnchor = offset
+                    this.readanyExpectedScroll = null
+                }
                 this.#scrollBounds = [offset, this.atStart ? 0 : size, this.atEnd ? 0 : size]
                 this.#afterScroll(reason)
             })
         } else {
             this.containerPosition = offset
+            if (this.#navigationLocked) {
+                this.readanyLockAnchor = offset
+                this.readanyExpectedScroll = null
+            }
             this.#scrollBounds = [offset, this.atStart ? 0 : size, this.atEnd ? 0 : size]
             this.#afterScroll(reason)
         }
