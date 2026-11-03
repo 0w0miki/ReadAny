@@ -2894,14 +2894,15 @@ export class Paginator extends HTMLElement {
                     }
                 }, 1400)
                 // The browser only auto-scrolls when the caret is dragged past
-                // the page edge; when it stays inside the page nothing moves.
-                // Fall back to a normal page turn and carry the selection over.
+                // the page edge; e-ink auto-scroll can take several hundred ms.
+                // If nothing moved after that grace, fall back to a normal page
+                // turn and carry the selection over.
                 if (this.readanySelectionFallbackTimer) clearTimeout(this.readanySelectionFallbackTimer)
                 this.readanySelectionFallbackTimer = setTimeout(() => {
                     this.readanySelectionFallbackTimer = null
                     const moved = Math.abs(this.containerPosition - this.readanySelectionFirePosition) > this.size * 0.3
                     if (!moved) void this.#readAnyTurnSelectionPage(corner)
-                }, 450)
+                }, 900)
                 readAnyGestureLog('selection-turn:fire', 'corner=' + corner,
                     'pos=' + this.containerPosition,
                     'page=' + this.page)
