@@ -994,6 +994,14 @@ export class Paginator extends HTMLElement {
     #stabilizing = false // true while #display is stabilizing layout
     #rendered = false // true after first #display completes
     #lastLayout = null // cached layout from the last #beforeRender call
+    // ReadAny: corner-dwell page turn while dragging a text selection.
+    readanySelectionTurnTimer = null
+    readanySelectionCorner = null
+    readanySelectionLastLength = 0
+    readanySelectionChangeCount = 0
+    readanySelectionLastChangeAt = 0
+    readanySelectionScrollAllowUntil = 0
+    readanySelectionAllowExpiryTimer = null
     // Cache of section index → vertical (boolean). Populated as views
     // are loaded so we can check direction *before* loading a section.
     #directionCache = new Map()
@@ -1180,7 +1188,10 @@ export class Paginator extends HTMLElement {
             }
         }, 250)
         this.#container.addEventListener('scroll', () => {
-            if (!this.scrolled && this.#navigationLocked && !this.#isAnimating) {
+            const allowSelectionScroll = performance.now() < this.readanySelectionScrollAllowUntil
+            if (allowSelectionScroll) {
+                this.readanyLockAnchor = this.containerPosition
+            } else if (!this.scrolled && this.#navigationLocked && !this.#isAnimating) {
                 const pos = this.containerPosition
                 const expected = this.readanyExpectedScroll
                 if (expected != null) {
@@ -1596,6 +1607,7 @@ export class Paginator extends HTMLElement {
             doc.addEventListener('keydown', () => isKeyboardSelecting = true)
             doc.addEventListener('keyup', () => isKeyboardSelecting = false)
             doc.addEventListener('selectionchange', () => {
+                this.#readAnyNoteSelectionCorner(doc)
                 if (this.scrolled) {
                     debugSelectionPaging('selectionchange-skip', { reason: 'scrolled' })
                     return
@@ -2743,10 +2755,151 @@ export class Paginator extends HTMLElement {
             this.dispatchEvent(new Event('stabilized'))
         }
     }
+    // ── ReadAny: corner-dwell page turn during a text-selection drag ──
+    // Android selection handles don't reach the page as touch/pointer events,
+    // so the corner is derived from the selection focus caret. A deliberate
+    // drag changes the selection repeatedly; a long-press that merely lands a
+    // caret does not, which keeps a resting press from turning pages.
+    #readAnyCaretCorner(doc) {
+        if (this.scrolled) return null
+        const sel = doc?.getSelection?.()
+        if (!sel || !sel.rangeCount || sel.isCollapsed) return null
+        const focusNode = sel.focusNode
+        if (!focusNode) return null
+        let rect
+        try {
+            const range = doc.createRange()
+            range.setStart(focusNode, sel.focusOffset)
+            range.collapse(true)
+            rect = range.getBoundingClientRect()
+        } catch {
+            return null
+        }
+        if (!rect || (!rect.width && !rect.height && !rect.top && !rect.left)) return null
+        let entry
+        for (const pair of this.#views.entries()) {
+            if (pair[1].document === doc) { entry = pair; break }
+        }
+        if (!entry) return null
+        const view = entry[1]
+        let mapped
+        try { mapped = this.#getRectMapper(view)(rect) } catch { return null }
+        const size = this.size
+        if (!(size > 0)) return null
+        const viewOffset = this.#getViewOffset(entry[0])
+        const x = mapped.left + viewOffset - this.#renderedStart
+        const y = rect.top
+        const viewHeight = doc.defaultView?.innerHeight || rect.height
+        if (!(viewHeight > 0)) return null
+        if (x < 0 || x > size || y < 0 || y > viewHeight) return null
+        if (x >= size * 0.78 && y >= viewHeight * 0.78) return 'br'
+        if (x <= size * 0.22 && y <= viewHeight * 0.22) return 'tl'
+        return null
+    }
+
+    #readAnyCancelSelectionTurn(reason) {
+        if (this.readanySelectionTurnTimer) {
+            clearTimeout(this.readanySelectionTurnTimer)
+            this.readanySelectionTurnTimer = null
+        }
+        if (this.readanySelectionAllowExpiryTimer) {
+            clearTimeout(this.readanySelectionAllowExpiryTimer)
+            this.readanySelectionAllowExpiryTimer = null
+        }
+        if (this.readanySelectionCorner) {
+            readAnyGestureLog('selection-turn:cancel', 'corner=' + this.readanySelectionCorner,
+                'reason=' + String(reason))
+        }
+        this.readanySelectionCorner = null
+        this.readanySelectionScrollAllowUntil = 0
+        globalThis.__readanySelectionTurnHint?.(null)
+    }
+
+    #readAnyNoteSelectionCorner(doc) {
+        if (this.scrolled) return
+        const sel = doc?.getSelection?.()
+        const length = sel?.toString?.().trim?.().length || 0
+        const now = performance.now()
+        if (length !== this.readanySelectionLastLength) {
+            this.readanySelectionLastLength = length
+            this.readanySelectionChangeCount += 1
+            this.readanySelectionLastChangeAt = now
+        }
+        // Keep the gate open briefly after a turn so the browser can finish
+        // scrolling the selection endpoint into view.
+        if (now < this.readanySelectionScrollAllowUntil) {
+            this.readanySelectionScrollAllowUntil = Math.max(
+                this.readanySelectionScrollAllowUntil, now + 700)
+            if (sel && !sel.isCollapsed && length) {
+                if (this.readanySelectionAllowExpiryTimer) clearTimeout(this.readanySelectionAllowExpiryTimer)
+                this.readanySelectionAllowExpiryTimer = setTimeout(() => {
+                    if (performance.now() >= this.readanySelectionScrollAllowUntil) {
+                        this.#readAnyCancelSelectionTurn('allow-expired')
+                    }
+                }, 1400)
+                return
+            }
+            this.#readAnyCancelSelectionTurn('selection-cleared')
+            return
+        }
+        if (!sel || sel.isCollapsed || !length) {
+            this.readanySelectionLastLength = 0
+            this.readanySelectionChangeCount = 0
+            this.readanySelectionLastChangeAt = 0
+            this.#readAnyCancelSelectionTurn('selection-cleared')
+            return
+        }
+        const corner = this.#readAnyCaretCorner(doc)
+        if (!corner) {
+            this.#readAnyCancelSelectionTurn('left-corner')
+            return
+        }
+        const draggingRecently = now - this.readanySelectionLastChangeAt < 350
+        if (!this.readanySelectionTurnTimer) {
+            // Require a real drag: the long-press that creates the first word
+            // changes the length once; a handle drag changes it repeatedly.
+            if (!draggingRecently || this.readanySelectionChangeCount < 2) return
+            this.readanySelectionCorner = corner
+            readAnyGestureLog('selection-turn:arm', 'corner=' + corner,
+                'length=' + length,
+                'pos=' + this.containerPosition,
+                'page=' + this.page)
+            globalThis.__readanySelectionTurnHint?.({ corner, armed: true, turned: false })
+            this.readanySelectionTurnTimer = setTimeout(() => {
+                this.readanySelectionTurnTimer = null
+                const current = doc.getSelection?.()
+                const stillCorner = this.#readAnyCaretCorner(doc)
+                if (!current || current.isCollapsed || stillCorner !== corner) {
+                    this.#readAnyCancelSelectionTurn('dwell-cancelled')
+                    return
+                }
+                // Let the browser's own selection auto-scroll run: it reveals
+                // the page the caret is being dragged onto and keeps extending
+                // the native selection, exactly like corner-hold on Kindle.
+                this.readanySelectionScrollAllowUntil = performance.now() + 1200
+                if (this.readanySelectionAllowExpiryTimer) clearTimeout(this.readanySelectionAllowExpiryTimer)
+                this.readanySelectionAllowExpiryTimer = setTimeout(() => {
+                    if (performance.now() >= this.readanySelectionScrollAllowUntil) {
+                        this.#readAnyCancelSelectionTurn('allow-expired')
+                    }
+                }, 1400)
+                readAnyGestureLog('selection-turn:fire', 'corner=' + corner,
+                    'pos=' + this.containerPosition,
+                    'page=' + this.page)
+                globalThis.__readanySelectionTurnHint?.({ corner, armed: false, turned: true })
+            }, 500)
+            return
+        }
+        if (this.readanySelectionCorner !== corner) {
+            this.#readAnyCancelSelectionTurn('corner-changed')
+        }
+    }
+
     #afterScroll(reason) {
         // While a selection gesture owns navigation, a native selection
         // auto-scroll must not update the page anchor / fire relocate.
-        if (reason === 'container-scroll' && this.#navigationLocked && !this.scrolled) {
+        if (reason === 'container-scroll' && this.#navigationLocked && !this.scrolled
+            && performance.now() >= this.readanySelectionScrollAllowUntil) {
             readAnyGestureLog('afterScroll:suppressed',
                 'pos=' + this.containerPosition,
                 'page=' + this.page,

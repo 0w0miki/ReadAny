@@ -47,6 +47,60 @@
       overflow: hidden;
     }
 
+    /* Corner-dwell page turn while dragging a text selection. */
+    #selection-turn-hint {
+      position: absolute;
+      inset: 0;
+      z-index: 28;
+      pointer-events: none;
+      opacity: 0;
+      color: var(--fg, #1c1c1e);
+    }
+
+    #selection-turn-hint[data-visible="true"] {
+      opacity: 1;
+    }
+
+    .selection-turn-edge {
+      position: absolute;
+      background: currentColor;
+      transition: transform 500ms linear, opacity 120ms ease;
+    }
+
+    .edge-top,
+    .edge-bottom {
+      left: 0;
+      right: 0;
+      height: 4px;
+      transform: scaleX(0);
+    }
+
+    .edge-top { top: 0; transform-origin: left; }
+    .edge-bottom { bottom: 0; transform-origin: right; }
+
+    .edge-left,
+    .edge-right {
+      top: 0;
+      bottom: 0;
+      width: 4px;
+      transform: scaleY(0);
+    }
+
+    .edge-left { left: 0; transform-origin: top; }
+    .edge-right { right: 0; transform-origin: bottom; }
+
+    #selection-turn-hint[data-corner="br"] .edge-bottom,
+    #selection-turn-hint[data-corner="br"] .edge-right,
+    #selection-turn-hint[data-corner="tl"] .edge-top,
+    #selection-turn-hint[data-corner="tl"] .edge-left {
+      transform: scale(1);
+    }
+
+    /* E-ink cannot run a 500ms fill; show the armed edge solid immediately. */
+    html.readany-reduce-motion #selection-turn-hint .selection-turn-edge {
+      transition: none;
+    }
+
     #pull-bookmark-indicator {
       position: absolute;
       left: 50%;
@@ -166,6 +220,12 @@
     <div id="pull-bookmark-indicator" aria-hidden="true" data-armed="false">
       <div class="pill" id="pull-bookmark-indicator-text"></div>
     </div>
+    <div id="selection-turn-hint" aria-hidden="true">
+      <div class="selection-turn-edge edge-top"></div>
+      <div class="selection-turn-edge edge-bottom"></div>
+      <div class="selection-turn-edge edge-left"></div>
+      <div class="selection-turn-edge edge-right"></div>
+    </div>
     <button id="footnote-tip" type="button" aria-hidden="true"></button>
     <div id="loading">
       <div class="spinner"></div>
@@ -188,6 +248,19 @@
     // TEMP diagnostics: route paginator touch/scroll state to adb logcat.
     globalThis.__readanyGestureLog = function (message) {
       postToRN('debug', { message: '[Gesture] ' + message });
+    };
+
+    // Corner-dwell hint for cross-page selection (called from paginator.js).
+    globalThis.__readanySelectionTurnHint = function (detail) {
+      const el = document.getElementById('selection-turn-hint');
+      if (!el) return;
+      if (!detail || !detail.corner) {
+        el.removeAttribute('data-visible');
+        el.removeAttribute('data-corner');
+        return;
+      }
+      el.setAttribute('data-corner', detail.corner);
+      el.setAttribute('data-visible', 'true');
     };
     window.__READANY_READER_BUILD_ID = 'android-local-server-cors';
     postToRN('debug', { message: '[ReaderBuild] ' + window.__READANY_READER_BUILD_ID });
