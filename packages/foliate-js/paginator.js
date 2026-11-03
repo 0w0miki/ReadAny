@@ -1002,6 +1002,8 @@ export class Paginator extends HTMLElement {
     readanySelectionLastChangeAt = 0
     readanySelectionScrollAllowUntil = 0
     readanySelectionAllowExpiryTimer = null
+    readanySelectionFallbackTimer = null
+    readanySelectionTurnCooldownUntil = 0
     // Cache of section index → vertical (boolean). Populated as views
     // are loaded so we can check direction *before* loading a section.
     #directionCache = new Map()
@@ -2806,6 +2808,10 @@ export class Paginator extends HTMLElement {
             clearTimeout(this.readanySelectionAllowExpiryTimer)
             this.readanySelectionAllowExpiryTimer = null
         }
+        if (this.readanySelectionFallbackTimer) {
+            clearTimeout(this.readanySelectionFallbackTimer)
+            this.readanySelectionFallbackTimer = null
+        }
         if (this.readanySelectionCorner) {
             readAnyGestureLog('selection-turn:cancel', 'corner=' + this.readanySelectionCorner,
                 'reason=' + String(reason))
@@ -2846,6 +2852,7 @@ export class Paginator extends HTMLElement {
             this.readanySelectionLastLength = 0
             this.readanySelectionChangeCount = 0
             this.readanySelectionLastChangeAt = 0
+            this.readanySelectionTurnCooldownUntil = 0
             this.#readAnyCancelSelectionTurn('selection-cleared')
             return
         }
@@ -2856,6 +2863,7 @@ export class Paginator extends HTMLElement {
         }
         const draggingRecently = now - this.readanySelectionLastChangeAt < 350
         if (!this.readanySelectionTurnTimer) {
+            if (now < this.readanySelectionTurnCooldownUntil) return
             // Require a real drag: the long-press that creates the first word
             // changes the length once; a handle drag changes it repeatedly.
             if (!draggingRecently || this.readanySelectionChangeCount < 2) return
@@ -2877,12 +2885,23 @@ export class Paginator extends HTMLElement {
                 // the page the caret is being dragged onto and keeps extending
                 // the native selection, exactly like corner-hold on Kindle.
                 this.readanySelectionScrollAllowUntil = performance.now() + 1200
+                this.readanySelectionTurnCooldownUntil = performance.now() + 1200
+                this.readanySelectionFirePosition = this.containerPosition
                 if (this.readanySelectionAllowExpiryTimer) clearTimeout(this.readanySelectionAllowExpiryTimer)
                 this.readanySelectionAllowExpiryTimer = setTimeout(() => {
                     if (performance.now() >= this.readanySelectionScrollAllowUntil) {
                         this.#readAnyCancelSelectionTurn('allow-expired')
                     }
                 }, 1400)
+                // The browser only auto-scrolls when the caret is dragged past
+                // the page edge; when it stays inside the page nothing moves.
+                // Fall back to a normal page turn and carry the selection over.
+                if (this.readanySelectionFallbackTimer) clearTimeout(this.readanySelectionFallbackTimer)
+                this.readanySelectionFallbackTimer = setTimeout(() => {
+                    this.readanySelectionFallbackTimer = null
+                    const moved = Math.abs(this.containerPosition - this.readanySelectionFirePosition) > this.size * 0.3
+                    if (!moved) void this.#readAnyTurnSelectionPage(corner)
+                }, 450)
                 readAnyGestureLog('selection-turn:fire', 'corner=' + corner,
                     'pos=' + this.containerPosition,
                     'page=' + this.page)
@@ -2893,6 +2912,34 @@ export class Paginator extends HTMLElement {
         if (this.readanySelectionCorner !== corner) {
             this.#readAnyCancelSelectionTurn('corner-changed')
         }
+    }
+
+    async #readAnyTurnSelectionPage(corner) {
+        const before = this.containerPosition
+        try {
+            if (corner === 'br') await this.next()
+            else await this.prev()
+        } catch (err) {
+            readAnyGestureLog('selection-turn:turn-error', String(err))
+            return
+        }
+        if (Math.abs(this.containerPosition - before) < 1) return
+        this.readanySelectionScrollAllowUntil = performance.now() + 1200
+        readAnyGestureLog('selection-turn:programmatic', 'corner=' + corner,
+            'from=' + before, 'to=' + this.containerPosition, 'page=' + this.page)
+        // Carry the native selection one line onto the newly revealed page so
+        // the handle follows the text instead of being left off-screen.
+        requestAnimationFrame(() => {
+            try {
+                const contents = this.getContents?.() || []
+                for (const { doc } of contents) {
+                    const sel = doc?.getSelection?.()
+                    if (!sel || sel.isCollapsed) continue
+                    sel.modify?.('extend', corner === 'br' ? 'forward' : 'backward', 'line')
+                    break
+                }
+            } catch (err) { /* no-op */ }
+        })
     }
 
     #afterScroll(reason) {
